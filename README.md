@@ -1,16 +1,13 @@
-# Aile Bütçe Takip v10 — okunabilir grafikler ve ay kapanışı
+# Aile Bütçe Takip — Firestore 403 düzeltmesi
 
-## Yapılanlar
-- Primary buttons use dark navy-blue with white high-contrast text.
-- Category summary is in the Ekstre İçe Aktar page; category and merchant amounts show in visible chart labels and tables without clicking/hovering.
-- Home finance chart and Harcama Analizi / Ay Karşılaştırma charts also show value labels directly.
-- The separate transaction ledger is absent from Genel Bakış; detailed rows remain in import review and analysis where they are useful.
-- The selected-month "Ayı kapat" button is in Ekstre İçe Aktar. A confirmation checkbox is required before closure. Closed months block uploads and budget/card-total edits; month can be reopened from the same page.
-- Firebase rules remain user-scoped by ownerUid. Do not make the Firestore database public.
+Bu paket, olmayan `app_meta` belgelerine doğrudan GET atıldığında Firestore REST'in döndürebildiği 403 hatasını gidermek için `get_document` fonksiyonuna güvenli kullanıcı kapsamlı sorgu geri dönüşü ekler.
 
-## Deploy
-Replace GitHub files `app.py`, `requirements.txt`, and `packages.txt` with those in this package. Then publish `firestore.rules` in Firebase Console → Firestore Database → Rules. Refresh/redeploy Streamlit.
+## Kurulum
+1. GitHub deposunda `app.py` dosyasını bu pakettekiyle değiştirin.
+2. Firebase Console → Firestore Database → Rules bölümünü açın.
+3. Bu paketteki `firestore.rules` içeriğinin tamamını Rules editörüne yapıştırıp **Publish** edin.
+4. Streamlit Cloud dağıtımı tamamlandıktan sonra uygulamayı yenileyin.
 
-Bank statements and the processed Excel workbook are intentionally not bundled, since the GitHub repository is public. Upload the processed Excel only through the app's import module if needed.
+Kurallar veritabanını herkese açmaz: oturum açan kullanıcı yalnızca `ownerUid` değeri kendi UID'si olan kayıtları okuyup yazabilir. Eksik bir belgeye GET isteğinin 404 döndürebilmesi için yalnızca oturum açmış kullanıcılara mevcut olmayan belge yollarında get izni verilir; mevcut kayıtlar yine ownerUid ile korunur.
 
-Python syntax checked. Live Firebase/Streamlit end-to-end verification has not been performed.
+Python sözdizimi kontrol edildi; canlı Firebase hesabında test edilmedi.

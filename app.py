@@ -465,6 +465,24 @@ def get_document(collection, doc_id):
     url = f"{FS_ROOT}/{collection}/{doc_id}"
     headers = {"Authorization": f"Bearer {get_id_token()}"}
     response = requests.get(url, headers=headers, timeout=20)
+
+    # With Firestore REST + ownerUid-scoped rules, GET on a document that does
+    # not exist can surface as 403 instead of 404. app_meta is queried by ownerUid
+    # as a safe fallback, so missing month-close/preference docs are treated as absent.
+    if response.status_code == 403 and collection == "app_meta":
+        auth = current_auth() or {}
+        uid = auth.get("uid")
+        if uid:
+            try:
+                owned_docs = list_documents("app_meta", uid, limit=1000)
+                return next((row for row in owned_docs if str(row.get("id", "")) == str(doc_id)), None)
+            except Exception as exc:
+                raise RuntimeError(
+                    "Firestore app_meta koleksiyonu için erişim reddedildi. "
+                    "Firebase Console → Firestore Database → Rules bölümünde güncel güvenlik kurallarını yayımlayın. "
+                    f"Ayrıntı: {exc}"
+                ) from exc
+
     if response.status_code == 404:
         return None
     if response.status_code >= 400:
@@ -477,7 +495,6 @@ def get_document(collection, doc_id):
     item = from_fs_fields(doc.get("fields", {}))
     item["id"] = doc["name"].rsplit("/", 1)[-1]
     return item
-
 
 def write_document(collection, doc_id, data):
     if collection not in COLLECTIONS:
