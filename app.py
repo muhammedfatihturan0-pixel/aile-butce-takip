@@ -187,7 +187,9 @@ def current_auth():
 
 
 def logout():
-    for key in ["auth", "import_preview", "import_source_name"]:
+    get_budget.clear()
+    load_transactions.clear()
+    for key in ["auth", "import_preview", "import_source_name", "quick_card_preference_loaded", "quick_card_preference"]:
         st.session_state.pop(key, None)
     st.rerun()
 
@@ -297,6 +299,7 @@ def budget_id(uid, month_key):
     return f"{uid}_{month_key}"
 
 
+@st.cache_data(ttl=45, show_spinner=False)
 def get_budget(uid, month_key):
     # Query by ownerUid only and filter month locally. This avoids index errors and
     # avoids a direct GET of a not-yet-created budget document.
@@ -314,8 +317,10 @@ def save_budget(uid, month_key, data):
     if "debtMeta" in data:
         payload["debtMeta"] = data["debtMeta"]
     write_document("monthly_budgets", budget_id(uid, month_key), payload)
+    get_budget.clear()
 
 
+@st.cache_data(ttl=45, show_spinner=False)
 def load_transactions(uid, month_key=None, limit=1000):
     rows = list_documents("transactions", uid, limit=limit)
     if month_key:
@@ -367,6 +372,7 @@ def add_transaction(uid, row):
     if any(x.get("dedupeKey") == row["dedupeKey"] for x in existing):
         return False
     create_document("transactions", row)
+    load_transactions.clear()
     return True
 
 
@@ -883,25 +889,51 @@ if page == PAGE_HOME:
     c4.metric("💳 Kart harcaması", money(statement_spend))
 
     st.markdown("### ⚡ Hızlı tutar kaydı")
-    # Kart listesi güvenli şekilde yüklenir; kart tanımlanmamışsa nakit seçeneği kullanılabilir.
     quick_cards = safe_load_collection(uid, "cards")
     quick_card_names = [str(c.get("name", "")).strip() for c in quick_cards if str(c.get("name", "")).strip()]
     quick_card_options = ["Nakit / banka kartı"] + quick_card_names
+
+    # Kart tercihi Firestore'da saklanır; kullanıcı değiştirene kadar korunur.
+    preference_key = "quick_card_preference"
+    if not st.session_state.get("quick_card_preference_loaded"):
+        try:
+            preference_doc = get_document("app_meta", f"{uid}_quick_card_preference")
+            saved_card = str((preference_doc or {}).get("card", "Nakit / banka kartı"))
+            st.session_state[preference_key] = saved_card if saved_card in quick_card_options else quick_card_options[0]
+        except Exception:
+            st.session_state[preference_key] = quick_card_options[0]
+        st.session_state["quick_card_preference_loaded"] = True
+
+    def persist_quick_card_preference():
+        selected_card = st.session_state.get(preference_key, "Nakit / banka kartı")
+        doc_id = f"{uid}_quick_card_preference"
+        payload = {"ownerUid": uid, "key": "quick_card_preference", "card": selected_card,
+                   "updatedAt": datetime.utcnow().isoformat(timespec="seconds")}
+        try:
+            existing_preference = get_document("app_meta", doc_id)
+            if existing_preference:
+                write_document("app_meta", doc_id, payload)
+            else:
+                create_document("app_meta", payload, doc_id=doc_id)
+        except Exception as exc:
+            st.session_state["quick_card_preference_error"] = str(exc)
+
+    quick_a, quick_b = st.columns([1, 1.5])
+    with quick_a:
+        quick_amount = st.number_input("Tutar (TL)", min_value=0.01, value=100.0, step=10.0,
+                                       format="%.2f", key="quick_amount_home")
+    with quick_b:
+        quick_card = st.selectbox("Kart / hesap", quick_card_options, key=preference_key,
+                                  on_change=persist_quick_card_preference)
+
     with st.form("quick_amount_home_form", border=True):
-        quick_a, quick_b, quick_c = st.columns([1.2, 1, 1.5])
-        with quick_a:
-            quick_amount = st.number_input("Tutar (TL)", min_value=0.01, value=100.0, step=10.0, format="%.2f")
-        with quick_b:
-            quick_owner = st.selectbox("Harcama sahibi", ["Ben", "Eşim", "Ortak", "Diğer"])
-        with quick_c:
-            quick_card = st.selectbox("Hangi kart / hesap?", quick_card_options)
         quick_save = st.form_submit_button("➕ Bugünün giderini kaydet", type="primary", width="stretch")
     if quick_save:
         today = today_tr()
         row = {"date": today.isoformat(), "calendarMonth": today.strftime("%Y-%m"), "month": today.strftime("%Y-%m"),
                "statementMonth": today.strftime("%Y-%m"), "amount": float(quick_amount),
                "description": "Hızlı gider — sınıflandırılacak", "category": "Kontrol edilecek", "merchant": "Sınıflandırılacak",
-               "subcategory": "Hızlı kayıt", "owner": quick_owner, "card": quick_card,
+               "subcategory": "Hızlı kayıt", "owner": "Belirsiz", "card": quick_card,
                "transactionType": "quick_expense", "sourceRowId": ""}
         try:
             added = add_transaction(uid, row)
@@ -912,7 +944,8 @@ if page == PAGE_HOME:
             st.rerun()
         except Exception as exc:
             st.error(f"Hızlı gider kaydedilemedi: {exc}")
-
+    if st.session_state.get("quick_card_preference_error"):
+        st.caption("Kart tercihi bu oturumda korundu ancak kalıcı kaydedilemedi. Firestore kurallarını kontrol edin.")
     left, right = st.columns([1, 1.15], gap="large")
     with left:
         section("💰", "Gelir ve ödeme planı", "Aktif ayın özeti")
@@ -980,9 +1013,6 @@ elif page == PAGE_BUDGET:
     title_hero(month_label, "Gelirini, aylık borç tutarlarını ve ödeme durumunu tek ekrandan yönet.")
     if selected_month < "2026-10":
         st.info("Bu geçmiş ay için bütçe kaydı yoksa sıfırdan girebilirsin. Başka ayların kayıtları değişmez.")
-    debt_meta = dict(budget.get("debtMeta", {}) or {})
-    status_options = ["Bekliyor", "Kısmi", "Ödendi"]
-    new_debt_meta = dict(debt_meta)
     with st.form("combined_budget_form", border=True):
         section("💰", "Gelirler", "Aylık gelirleri gir")
         new_income = dict(income)
@@ -996,43 +1026,30 @@ elif page == PAGE_BUDGET:
         add_income_name = st.text_input("➕ Yeni gelir kalemi", placeholder="Örn. sınav görevi")
         add_income_value = st.number_input("Yeni gelir tutarı (TL)", min_value=0.0, step=100.0, key="add_income_amount_combined")
         st.markdown("---")
-        section("🧾", "Borçlar ve aylık ödemeler", "Tutarı ve ödeme durumunu burada güncelle. Ayrı borç menüsü yok.")
+        section("🧾", "Borçlar ve aylık ödemeler", "Yalnızca aylık tutarları güncelle; ödeme durumunu ayrıca takip etmiyoruz.")
         new_expenses = dict(expenses)
         for i, (name, amount) in enumerate(list(expenses.items())):
-            meta = debt_meta.get(name, {}) if isinstance(debt_meta.get(name, {}), dict) else {}
-            default_owner = meta.get("owner", "Eşim" if "eş" in norm(name) else ("Ben" if any(x in norm(name) for x in ["SIZIN", "COLENDI"]) else "Belirsiz"))
-            if default_owner not in OWNERS: default_owner = "Belirsiz"
-            default_status = meta.get("status", "Bekliyor")
-            if default_status not in status_options: default_status = "Bekliyor"
-            cols = st.columns([2.0, 1.2, 1.2])
-            with cols[0]:
-                new_expenses[name] = st.number_input(f"{name} (TL)", min_value=0.0, value=float(amount or 0), step=100.0, key=f"exp_{selected_month}_{name}")
-            with cols[1]:
-                updated_status = st.selectbox("Ödeme durumu", status_options, index=status_options.index(default_status), key=f"status_{selected_month}_{name}")
-            with cols[2]:
-                updated_owner = st.selectbox("Sorumlu", OWNERS, index=OWNERS.index(default_owner), key=f"owner_{selected_month}_{name}")
-            new_debt_meta[name] = {**meta, "status": updated_status, "owner": updated_owner}
+            new_expenses[name] = st.number_input(
+                f"{name} (TL)", min_value=0.0, value=float(amount or 0), step=100.0,
+                key=f"exp_{selected_month}_{name}"
+            )
         add_expense_name = st.text_input("➕ Yeni borç / gider kalemi", placeholder="Örn. yeni kredi kartı veya taksit")
-        c1, c2, c3 = st.columns([1,1,1])
-        with c1:
-            add_expense_value = st.number_input("Yeni kalem tutarı (TL)", min_value=0.0, step=100.0, key="add_expense_amount_combined")
-        with c2:
-            add_expense_owner = st.selectbox("Yeni kalem sorumlusu", OWNERS, key="add_expense_owner_combined")
-        with c3:
-            add_expense_status = st.selectbox("Yeni kalemin durumu", status_options, key="add_expense_status_combined")
+        add_expense_value = st.number_input("Yeni kalem tutarı (TL)", min_value=0.0, step=100.0, key="add_expense_amount_combined")
         notes = st.text_area("Ay notu", value=budget.get("notes", ""), placeholder="Örn. ekstre arttı, taksit bitti...")
         submitted = st.form_submit_button("💾 Bu ayın bütçesini kaydet", type="primary", width="stretch")
     if submitted:
-        if add_income_name.strip(): new_income[add_income_name.strip()] = add_income_value
+        if add_income_name.strip():
+            new_income[add_income_name.strip()] = add_income_value
         if add_expense_name.strip():
             if add_expense_name.strip() in new_expenses:
                 st.warning("Bu isimde bir kalem var; mevcut kalemi güncelle.")
             else:
                 new_expenses[add_expense_name.strip()] = add_expense_value
-                new_debt_meta[add_expense_name.strip()] = {"owner":add_expense_owner, "status":add_expense_status, "kind":"Diğer"}
         try:
-            save_budget(uid, selected_month, {"income":new_income, "expenses":new_expenses, "notes":notes, "debtMeta":new_debt_meta})
-            st.success(f"{month_label} bütçesi ve ödeme durumları kaydedildi.")
+            # Eski debtMeta verisi korunur, artık ödeme durumu/sorumlu sorulmaz.
+            save_budget(uid, selected_month, {"income": new_income, "expenses": new_expenses, "notes": notes,
+                                              "debtMeta": budget.get("debtMeta", {}) or {}})
+            st.success(f"{month_label} bütçesi kaydedildi.")
             st.rerun()
         except Exception as exc:
             st.error(f"Kaydedilemedi: {exc}")
