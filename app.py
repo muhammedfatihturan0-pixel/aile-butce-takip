@@ -1226,7 +1226,7 @@ PAGE_CARDS = "💳 Kartlar ve Ekstreler"
 PAGE_ANALYSIS = "🔎 Harcama Analizi"
 PAGE_COMPARE = "📊 Ay Karşılaştırma"
 PAGE_DATA = "⚙️ Veri Yönetimi"
-VALID_PAGES = {PAGE_HOME, PAGE_BUDGET, PAGE_IMPORT, PAGE_CARDS, PAGE_ANALYSIS, PAGE_COMPARE, PAGE_DATA}
+VALID_PAGES = {PAGE_HOME, PAGE_BUDGET, PAGE_ANALYSIS, PAGE_DATA}
 if st.session_state.get("app_page") not in VALID_PAGES:
     st.session_state["app_page"] = PAGE_HOME
 with st.sidebar:
@@ -1274,8 +1274,8 @@ total_income = sum(float(v or 0) for v in income.values())
 total_expenses = sum(float(v or 0) for v in expenses.values())
 net_cash = total_income - total_expenses
 month_label = month_label_tr(selected_month)
-if month_closed and page not in {PAGE_IMPORT}:
-    st.warning(f"🔒 {month_label} kapalı. Bu dönemin bütçesi ve yeni işlem aktarımları kilitli; düzeltme için Ekstre İçe Aktar bölümünden ayı yeniden aç.")
+if month_closed and page != PAGE_HOME:
+    st.warning(f"🔒 {month_label} kapalı. Bu dönemin bütçesi kilitli; düzeltme gerekiyorsa Ana sayfadaki Ayı yeniden aç düğmesini kullan.")
 
 if page == PAGE_HOME:
     title_hero(month_label, "Ailenin bütçesini, kart ekstrelerini ve harcamalarını tek ekrandan yönet.")
@@ -1398,6 +1398,56 @@ if page == PAGE_HOME:
 
     if st.session_state.get("quick_card_preference_error"):
         st.caption("Kart tercihi bu oturumda korundu ancak kalıcı kaydedilemedi. Firestore Rules içinde app_meta koleksiyonuna erişimi kontrol edin.")
+
+    # Month close controls live on Home; statement-specific modules are no longer exposed.
+    st.markdown("---")
+    section("🔒", "Ayı kapat", f"Seçili dönem: {month_label}")
+    current_month_statements = [
+        s for s in safe_load_collection(uid, "statements")
+        if str(s.get("month", "")) == selected_month
+    ]
+    closed_card_statements = [
+        s for s in current_month_statements
+        if s.get("closed") or s.get("status") in ["Kesildi", "Ödendi"]
+    ]
+    st.caption(
+        f"{len(closed_card_statements)} kart ekstresi daha önce kapatılmış. "
+        "Gelir ve kart tutarlarını kontrol ettikten sonra ayı kapatabilirsin."
+    )
+    if month_closed:
+        st.success(f"🔒 {month_label} kapalı. Bütçe ve yeni harcama kayıtları kilitli.")
+        if st.button("🔓 Ayı yeniden aç", key=f"home_reopen_month_{selected_month}", width="stretch"):
+            try:
+                set_month_closure(uid, selected_month, False)
+                for statement in current_month_statements:
+                    if statement.get("closed") or statement.get("status") in ["Kesildi", "Ödendi"]:
+                        sid = statement.get("id") or f"{uid}_{selected_month}_{re.sub(r'[^a-zA-Z0-9]+','-',str(statement.get('card','Kart'))).strip('-').lower()}"
+                        write_document("statements", sid, {
+                            "ownerUid": uid, "month": selected_month,
+                            "card": str(statement.get("card", "")),
+                            "status": "Açık", "closed": False,
+                            "updatedAt": datetime.utcnow().isoformat(timespec="seconds")
+                        })
+                st.success(f"{month_label} yeniden açıldı.")
+                st.rerun()
+            except Exception as exc:
+                st.error(f"Ay yeniden açılamadı: {exc}")
+    else:
+        confirm_month_close_home = st.checkbox(
+            f"{month_label} için tutarları kontrol ettim; ayı kapatmaya hazırım.",
+            key=f"home_confirm_month_close_{selected_month}"
+        )
+        if st.button(
+            "🔒 Ayı kapat", key=f"home_close_month_{selected_month}",
+            type="primary", width="stretch", disabled=not confirm_month_close_home
+        ):
+            try:
+                set_month_closure(uid, selected_month, True, tx_rows)
+                st.success(f"{month_label} kapatıldı. Bu dönem artık kilitli.")
+                st.rerun()
+            except Exception as exc:
+                st.error(f"Ay kapatılamadı: {exc}")
+
     left = st.container()
     with left:
         section("💰", "Gelir ve ödeme planı", "Aktif ayın özeti")
@@ -1418,11 +1468,8 @@ if page == PAGE_HOME:
     st.markdown("---")
     section("🧩", "Modüller", "İstediğin bölüme dokunarak geç. Soldaki menü sade tutuldu.")
     module_cards = [
-        ("🗓️ Bütçe ve Borçlar", PAGE_BUDGET, "Aylık gelir, ödeme tutarları, yeni borç kalemleri ve ödendi/bekliyor durumu."),
-        ("📥 Ekstre İçe Aktar", PAGE_IMPORT, "PDF, CSV ve Excel ekstrelerini analiz et, doğrula ve kaydet."),
-        ("💳 Kartlar ve Ekstreler", PAGE_CARDS, "Senin ve eşinin kartlarını ayrı tut; her kartın ekstresini kapat."),
-        ("🔎 Harcama Analizi", PAGE_ANALYSIS, "Kategori, işletme, kişi ve kart bazında ayrıntılı inceleme."),
-        ("📊 Ay Karşılaştırma", PAGE_COMPARE, "Geçmiş ayların bütçelerini ve kategori harcamalarını kıyasla."),
+        ("🗓️ Bütçe ve Borçlar", PAGE_BUDGET, "Aylık gelir ve kart tutarlarını düzenle."),
+        ("🔎 Harcama Analizi", PAGE_ANALYSIS, "Kayıtlı harcamaları kategori, işletme ve karta göre incele."),
         ("⚙️ Veri Yönetimi", PAGE_DATA, "Kayıtlarını dışa aktar ve yedek al.")
     ]
     for row_start in range(0, len(module_cards), 3):
@@ -1440,7 +1487,7 @@ if page == PAGE_HOME:
 elif page == PAGE_BUDGET:
     title_hero(month_label, "Gelirini, aylık borç tutarlarını ve ödeme durumunu tek ekrandan yönet.")
     if month_closed:
-        st.warning(f"🔒 {month_label} ayı kapalı. Bütçe değerlerini değiştirmek için önce Ekstre İçe Aktar bölümünden ayı yeniden aç.")
+        st.warning(f"🔒 {month_label} ayı kapalı. Bütçe değerlerini değiştirmek için önce Ana sayfadan ayı yeniden aç.")
     if selected_month < "2026-10":
         st.info("Bu geçmiş ay için bütçe kaydı yoksa sıfırdan girebilirsin. Başka ayların kayıtları değişmez.")
     with st.form("combined_budget_form", border=True):
