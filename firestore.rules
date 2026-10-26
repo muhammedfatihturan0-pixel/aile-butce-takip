@@ -4,26 +4,9 @@ service cloud.firestore {
     function signedIn() { return request.auth != null; }
     function ownsExisting() { return signedIn() && resource.data.ownerUid == request.auth.uid; }
     function ownsNew() { return signedIn() && request.resource.data.ownerUid == request.auth.uid; }
-
-    match /monthly_budgets/{docId} {
-      allow read, delete: if ownsExisting();
-      allow create: if ownsNew();
-      allow update: if ownsExisting() && ownsNew();
-    }
-    match /transactions/{docId} {
-      allow read, delete: if ownsExisting();
-      allow create: if ownsNew();
-      allow update: if ownsExisting() && ownsNew();
-    }
-    match /cards/{docId} {
-      allow read, delete: if ownsExisting();
-      allow create: if ownsNew();
-      allow update: if ownsExisting() && ownsNew();
-    }
-    match /statements/{docId} {
-      allow read, delete: if ownsExisting();
-      allow create: if ownsNew();
-      allow update: if ownsExisting() && ownsNew();
-    }
+    match /monthly_budgets/{docId} { allow read, delete: if ownsExisting(); allow create: if ownsNew(); allow update: if ownsExisting() && ownsNew(); }
+    match /transactions/{docId} { allow read, delete: if ownsExisting(); allow create: if ownsNew(); allow update: if ownsExisting() && ownsNew(); }
+    match /cards/{docId} { allow read, delete: if ownsExisting(); allow create: if ownsNew(); allow update: if ownsExisting() && ownsNew(); }
+    match /statements/{docId} { allow read, delete: if ownsExisting(); allow create: if ownsNew(); allow update: if ownsExisting() && ownsNew(); }
   }
 }
