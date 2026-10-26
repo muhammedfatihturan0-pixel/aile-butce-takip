@@ -1,40 +1,30 @@
-# Aile Bütçe Takip
+# Aile Bütçe Takip — v4
 
-Streamlit + Firebase Authentication + Cloud Firestore REST API ile kişisel aile bütçesi uygulaması.
+Streamlit + Firebase Authentication + Firestore ile aile bütçesi, kart ekstresi, borç ve kategori karşılaştırmaları.
 
-## İlk kurulum
+## Bu sürümde
+- Tüm ay adları Türkçe gösterilir; varsayılan dönem Türkiye tarihine göre seçilir.
+- İşlem defterinde tek alanlı hızlı gider kaydı vardır: yalnızca tutarı girilir, tarih otomatik atanır.
+- Ekstreler PDF/Excel/CSV yüklemesiyle analiz edilir; kategori, işletme (ör. A101, BİM, Migros), kişi ve kart gözden geçirilip aktarılır.
+- Kartlar kişiye göre tanımlanır ve her kart için seçili aya özel **Ekstreyi kapat / yeniden aç** işlemi bulunur. Kapalı karta/aya geç işlem aktarımı engellenir.
+- Borç ve ödeme ekranında mevcut kart/borç tutarı seçili ay için güncellenir; yeni özel borç kategorisi eklenebilir ve kişi/tür/bağlı hesap/ödeme durumu kaydedilir. Bu tutarlar Aylık Bütçe toplamlarıyla aynı kayıtlardan gelir ve iki kez sayılmaz.
+- Firestore sorguları yalnızca `ownerUid` filtresiyle yapılır; ay, kart ve sıralama uygulamada filtrelenir. Böylece eksik composite index hatasının önüne geçilir.
+- Tapu harcı satırları ekstre analizinden hariç bırakılır. Belirsiz OCR tutarları kontrol edilmeden otomatik dahil edilmez.
 
-1. Bu depodaki dosyaları GitHub'a yükleyin.
-2. Firebase Authentication içinde Email/Password etkin olsun ve kullanıcı hesabı Firebase Console → Authentication → Users bölümünden oluşturulsun. Uygulama içi kayıt kapalıdır.
-3. Cloud Firestore → Rules bölümüne `firestore.rules` dosyasındaki kuralları uygulayın ve **Publish** edin.
-4. Streamlit Community Cloud'da bu depoyu seçerek `app.py` dosyasını yayımlayın.
-5. Streamlit App settings → Secrets içine aşağıdaki bilgileri koyun:
+## Güncelleme
+1. ZIP'i açın. `app.py`, `requirements.txt`, `packages.txt`, `firestore.rules` ve `README.md` dosyalarını GitHub deposundakilerle değiştirin veya ekleyin.
+2. Commit edin ve Streamlit Cloud'un yeniden dağıtımını bekleyin.
+3. Firebase Console → Firestore Database → Rules bölümünde `firestore.rules` içeriğini yayımlayın.
+4. Ekstre işlemlerini yüklemeden önce Kartlar ve Ekstreler bölümünde her fiziksel kartı ayrı kaydedin; kart sahibi ve kesim/ödeme günlerini tanımlayın.
 
+## Secrets
 ```toml
 [firebase]
 project_id = "aile-butce-takip-14da8"
-api_key = "FIREBASE_WEB_API_KEY"
+api_key = "FIREBASE_WEB_APP_API_KEY"
 
 [openai]
 api_key = "OPENAI_API_KEY"
 model = "gpt-4o-mini"
 ```
-
-`[openai]` bölümü isteğe bağlıdır ancak yapay zekâ sınıflandırması ve PDF ekstre ayrıştırması için gerekir. Boş anahtar koymak yerine bu bölümü eklememek de mümkündür.
-
-## Güvenlik
-
-- Bu sürüm Firebase kullanıcı adı/şifre doğrulaması yapar ve Firestore'a kullanıcının ID token'ı ile REST üzerinden bağlanır.
-- Firestore kuralları her dokümanda `ownerUid == request.auth.uid` şartını uygular.
-- Firebase Admin SDK özel anahtarı bu sürümde kullanılmaz. Bu nedenle özel anahtarı depoya koymayın.
-- `firestore.rules` yayımlanmadan önce uygulama kullanılmamalıdır.
-- OpenAI sınıflandırmasında işlem açıklaması, tarih ve tutar gibi alanlar API'ye gönderilir. PDF metni gönderilmeden önce yaygın hesap numarası biçimleri ayıklanmaya çalışılır; buna rağmen kişisel bilgilerin tamamen temizlendiği garanti edilemez. Yüklemeden önce dosyayı kontrol edin.
-- Bu uygulama finansal kayıt defteridir; banka hesabınıza bağlanmaz ve bankanızın resmî kayıtlarının yerine geçmez.
-
-## Modüller
-
-- Aylık gelir / ödeme planı
-- Manuel işlem kaydı
-- CSV/Excel içe aktarma önizlemesi
-- PDF metninden AI yardımıyla işlem çıkarımı (metin tabanlı PDF; taranmış PDF OCR gerektirebilir)
-- Kategori ve kişi bazlı aylık karşılaştırma
+Yapay zekâ anahtarı kullanılmayacaksa `[openai]` bölümü eklenmeyebilir. Admin SDK özel anahtarı bu sürümde kullanılmaz ve GitHub'a yüklenmemelidir.
