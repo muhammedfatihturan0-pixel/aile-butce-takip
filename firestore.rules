@@ -8,5 +8,6 @@ service cloud.firestore {
     match /transactions/{docId} { allow read, delete: if ownsExisting(); allow create: if ownsNew(); allow update: if ownsExisting() && ownsNew(); }
     match /cards/{docId} { allow read, delete: if ownsExisting(); allow create: if ownsNew(); allow update: if ownsExisting() && ownsNew(); }
     match /statements/{docId} { allow read, delete: if ownsExisting(); allow create: if ownsNew(); allow update: if ownsExisting() && ownsNew(); }
+    match /app_meta/{docId} { allow read, delete: if ownsExisting(); allow create: if ownsNew(); allow update: if ownsExisting() && ownsNew(); }
   }
 }
