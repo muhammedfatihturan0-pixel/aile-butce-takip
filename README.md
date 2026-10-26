@@ -1,7 +1,5 @@
-# Aile Bütçe Takip — Yeni tasarım
+# Aile Bütçe Takip — Kontrast düzeltmesi
 
-Bu sürümde daha kompakt, koyu lacivert/yeşil vurgulu arayüz uygulanmıştır. Kırmızı buton görünümü yerine yumuşak turkuaz vurgu, daha dengeli kartlar, daha kompakt başlıklar ve mobil uyumlu boşluklar kullanılır.
-
-Ayrıca cihazda oturumu hatırlama çerezi tek bileşen olarak tutulur; aynı çalıştırmada birden fazla çerez set çağrısının oluşturabildiği aynı-key hatası önlenmiştir.
+Yeni tasarım korunarak metin, etiket, form alanı, açılır liste, metrik kartı, uyarı ve yan menü yazılarının kontrastı yükseltildi. Arka plan ve turkuaz vurgu renkleri değiştirilmedi.
 
 GitHub'daki app.py ve requirements.txt dosyalarını bu pakettekilerle değiştirin.

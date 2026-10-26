@@ -45,9 +45,44 @@ st.markdown(r"""
   border:1px solid var(--line); padding:16px 18px; border-radius:17px;
   box-shadow:0 8px 24px rgba(0,0,0,.12); min-height:112px;
 }
-[data-testid="stMetricLabel"] {color:#a9bad1; font-size:.84rem;}
-[data-testid="stMetricValue"] {font-weight:760; letter-spacing:-.04em; font-size:clamp(1.25rem,2vw,1.8rem);}
-[data-testid="stMetricDelta"] {font-size:.78rem;}
+[data-testid="stMetricLabel"] {color:#d0dced !important; font-size:.86rem; font-weight:600;}
+[data-testid="stMetricValue"] {color:#ffffff !important; font-weight:760; letter-spacing:-.035em; font-size:clamp(1.25rem,2vw,1.8rem);}
+[data-testid="stMetricDelta"] {font-size:.8rem; color:#c9d7e9 !important;}
+[data-testid="stMarkdownContainer"], [data-testid="stMarkdownContainer"] p,
+[data-testid="stMarkdownContainer"] li, [data-testid="stCaptionContainer"] {
+  color:#e3ebf7;
+}
+[data-testid="stCaptionContainer"] {color:#b8c6d9 !important;}
+label, [data-testid="stWidgetLabel"] p, [data-testid="stWidgetLabel"] label,
+[data-testid="stRadio"] label, [data-testid="stCheckbox"] label {
+  color:#eaf1fb !important;
+}
+[data-testid="stTextInput"] input, [data-testid="stNumberInput"] input,
+[data-testid="stTextArea"] textarea, [data-testid="stDateInput"] input {
+  color:#ffffff !important; -webkit-text-fill-color:#ffffff !important;
+  background:#202c3e !important; caret-color:#65e2c2;
+}
+[data-testid="stSelectbox"] [data-baseweb="select"] > div,
+[data-testid="stMultiSelect"] [data-baseweb="select"] > div {
+  color:#ffffff !important; background:#202c3e !important;
+}
+[data-testid="stSelectbox"] [data-baseweb="select"] span,
+[data-testid="stMultiSelect"] [data-baseweb="select"] span {
+  color:#ffffff !important;
+}
+[data-baseweb="popover"], [data-baseweb="menu"], [role="listbox"] {
+  background:#172337 !important; color:#ffffff !important;
+}
+[role="option"], [role="option"] * {color:#f4f7fc !important;}
+[data-testid="stDataFrame"] {color:#f2f6fc;}
+[data-testid="stAlert"] {color:#f5f8ff !important;}
+[data-testid="stAlert"] p, [data-testid="stAlert"] div {color:inherit;}
+[data-testid="stExpander"] summary, [data-testid="stExpander"] summary p {
+  color:#edf4ff !important;
+}
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p,
+[data-testid="stSidebar"] label {color:#e1eaf7 !important;}
+.small-muted, .section-sub, .kpi-note {color:#b8c7dc !important;}
 .stButton>button, .stDownloadButton>button, [data-testid="stFormSubmitButton"] button {
   border-radius:11px; font-weight:650; min-height:2.55rem; transition:all .16s ease;
 }
@@ -84,11 +119,11 @@ st.markdown(r"""
 .app-hero:after {content:"";position:absolute;right:-58px;top:-115px;width:260px;height:260px;border-radius:50%;border:1px solid rgba(101,226,194,.16);box-shadow:0 0 0 28px rgba(101,226,194,.025),0 0 0 58px rgba(101,226,194,.02);}
 .app-hero .eyebrow {font-size:.7rem;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);font-weight:850;}
 .app-hero h1 {margin:.55rem 0 .42rem 0;font-size:clamp(1.55rem,2.4vw,2.1rem);line-height:1.12;letter-spacing:-.045em;color:white;}
-.app-hero p {margin:0;color:#c1cee0;font-size:.94rem;max-width:780px;}
+.app-hero p {margin:0;color:#e0e9f6;font-size:.94rem;max-width:780px;}
 .app-hero .period {float:right;position:relative;z-index:1;padding:7px 11px;border-radius:10px;font-size:.78rem;font-weight:750;color:#c8fff1;border:1px solid rgba(101,226,194,.25);background:rgba(101,226,194,.08);}
 .section-head {display:flex;gap:11px;align-items:center;margin:1.2rem 0 .55rem 0;}
 .section-icon {display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:12px;background:#172b3a;border:1px solid rgba(101,226,194,.18);font-size:1.12rem;}
-.section-title {font-weight:800;font-size:1.08rem;letter-spacing:-.025em;color:#edf4ff;}
+.section-title {font-weight:800;font-size:1.08rem;letter-spacing:-.025em;color:#ffffff;}
 .section-sub {font-size:.81rem;color:var(--muted);margin-top:2px;}
 .small-muted {font-size:.8rem;color:var(--muted);}
 .kpi-note {font-size:.78rem;color:var(--muted);margin-top:4px;}
