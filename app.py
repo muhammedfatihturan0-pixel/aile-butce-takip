@@ -4,7 +4,7 @@ import json
 import re
 import time
 import unicodedata
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 from io import BytesIO
 from pathlib import Path
@@ -12,9 +12,13 @@ from pathlib import Path
 import pandas as pd
 import requests
 import streamlit as st
+import extra_streamlit_components as stx
 import plotly.express as px
 
 st.set_page_config(page_title="Aile Bütçe Takip", page_icon="💠", layout="wide", initial_sidebar_state="expanded")
+
+# Bu cihazda oturumu açık tutmak için tarayıcı çerezi (şifre saklanmaz).
+_cookie_manager = stx.CookieManager(key="aile_butce_auth_cookie")
 
 # ---------- Modern dashboard styling ----------
 st.markdown(r"""
@@ -162,7 +166,7 @@ def auth_url(path):
     return f"https://identitytoolkit.googleapis.com/v1/{path}?key={API_KEY}"
 
 
-def login(email, password):
+def login(email, password, remember_device=False):
     response = requests.post(
         auth_url("accounts:signInWithPassword"),
         json={"email": email, "password": password, "returnSecureToken": True},
@@ -179,8 +183,59 @@ def login(email, password):
         "id_token": data["idToken"], "refresh_token": data["refreshToken"],
         "uid": data["localId"], "email": data.get("email", email),
         "expires_at": time.time() + int(data.get("expiresIn", 3600)) - 60,
+        "remember_device": bool(remember_device),
     }
+    if remember_device:
+        _cookie_manager.set("fb_refresh_token", data["refreshToken"],
+                            expires_at=datetime.now() + timedelta(days=30),
+                            same_site="lax", secure=True)
+        _cookie_manager.set("fb_user_email", data.get("email", email),
+                            expires_at=datetime.now() + timedelta(days=30),
+                            same_site="lax", secure=True)
+    else:
+        try:
+            _cookie_manager.delete("fb_refresh_token")
+            _cookie_manager.delete("fb_user_email")
+        except Exception:
+            pass
 
+
+def restore_auth_from_cookie():
+    """Restore a trusted-device session without asking for the password again."""
+    if st.session_state.get("auth"):
+        return True
+    try:
+        cookies = _cookie_manager.get_all() or {}
+        refresh_token = cookies.get("fb_refresh_token")
+        email = cookies.get("fb_user_email", "")
+        if not refresh_token:
+            return False
+        response = requests.post(
+            f"https://securetoken.googleapis.com/v1/token?key={API_KEY}",
+            data={"grant_type": "refresh_token", "refresh_token": refresh_token}, timeout=20,
+        )
+        if response.status_code != 200:
+            try:
+                _cookie_manager.delete("fb_refresh_token")
+                _cookie_manager.delete("fb_user_email")
+            except Exception:
+                pass
+            return False
+        data = response.json()
+        st.session_state["auth"] = {
+            "id_token": data["id_token"],
+            "refresh_token": data.get("refresh_token", refresh_token),
+            "uid": data.get("user_id", ""),
+            "email": email,
+            "expires_at": time.time() + int(data.get("expires_in", 3600)) - 60,
+            "remember_device": True,
+        }
+        _cookie_manager.set("fb_refresh_token", st.session_state["auth"]["refresh_token"],
+                            expires_at=datetime.now() + timedelta(days=30),
+                            same_site="lax", secure=True)
+        return bool(st.session_state["auth"]["uid"])
+    except Exception:
+        return False
 
 def current_auth():
     return st.session_state.get("auth")
@@ -191,6 +246,11 @@ def logout():
     load_transactions.clear()
     for key in ["auth", "import_preview", "import_source_name", "quick_card_preference_loaded", "quick_card_preference"]:
         st.session_state.pop(key, None)
+    try:
+        _cookie_manager.delete("fb_refresh_token")
+        _cookie_manager.delete("fb_user_email")
+    except Exception:
+        pass
     st.rerun()
 
 
@@ -213,6 +273,13 @@ def get_id_token():
         "uid": data.get("user_id", auth["uid"]), "expires_at": time.time() + int(data.get("expires_in", 3600)) - 60,
     })
     st.session_state["auth"] = auth
+    if auth.get("remember_device"):
+        try:
+            _cookie_manager.set("fb_refresh_token", auth["refresh_token"],
+                                expires_at=datetime.now() + timedelta(days=30),
+                                same_site="lax", secure=True)
+        except Exception:
+            pass
     return auth["id_token"]
 
 
@@ -461,7 +528,7 @@ def default_budget(month_key):
     colendi = 9103 if (year, month) <= (2027, 3) else 0
     return {
         "income": {"Sizin Maaş": 73800, "Eş Maaş": 73200, "Sizin Ek Ders": 19800, "Eş Ek Ders": 20800},
-        "expenses": {"Eminevim": emin, "Sizin Akbank": 47200, "Eş Akbank": 25300, "Colendi": colendi, "İş Bankası": 5750, "Ziraat": 0},
+        "expenses": {"Akbank Kredi Kartı F": 47200, "Akbank A": 25300, "Ziraat A": 0, "İşbank F": 5750, "Eminevim": emin, "Colendi": colendi},
         "notes": "Başlangıç tutarlarıdır; her ayın gerçek tutarlarını ayrı kaydedin."
     }
 
@@ -794,6 +861,7 @@ def login_view():
     with st.form("login_form"):
         email = st.text_input("E-posta", autocomplete="email")
         password = st.text_input("Şifre", type="password", autocomplete="current-password")
+        remember_device = st.checkbox("Bu cihazda oturumu açık tut (30 gün)", value=True)
         submit = st.form_submit_button("Güvenli giriş", width="stretch", type="primary")
     if submit:
         if not API_KEY or not PROJECT_ID:
@@ -802,7 +870,7 @@ def login_view():
             st.warning("E-posta ve şifre girin.")
         else:
             try:
-                login(email.strip(), password)
+                login(email.strip(), password, remember_device=remember_device)
                 st.rerun()
             except Exception as exc:
                 st.error(f"Giriş başarısız: {exc}")
@@ -815,6 +883,9 @@ if not API_KEY or not PROJECT_ID:
     st.error("Firebase ayarları eksik. Streamlit Cloud → App settings → Secrets alanına Firebase proje ID'sini ve Web API anahtarını ekleyin.")
     st.code('[firebase]\nproject_id = "aile-butce-takip-14da8"\napi_key = "FIREBASE_WEB_APP_API_KEY"', language="toml")
     st.stop()
+
+if not current_auth():
+    restore_auth_from_cookie()
 
 if not current_auth():
     login_view()
@@ -869,7 +940,21 @@ except Exception as exc:
     st.stop()
 
 income = budget.get("income", {}) or {}
-expenses = budget.get("expenses", {}) or {}
+expenses = dict(budget.get("expenses", {}) or {})
+# Eski isimleri yeni kart etiketlerine taşı; tutarlar kaybolmaz ve kullanıcı kaydettiğinde yeni adlarla saklanır.
+LEGACY_EXPENSE_NAMES = {
+    "Sizin Akbank": "Akbank Kredi Kartı F",
+    "Eş Akbank": "Akbank A",
+    "İş Bankası": "İşbank F",
+    "Ziraat": "Ziraat A",
+}
+for old_name, new_name in LEGACY_EXPENSE_NAMES.items():
+    if old_name in expenses:
+        old_amount = expenses.pop(old_name)
+        expenses.setdefault(new_name, old_amount)
+# Kartlar önce, sabit borçlar sonra gösterilsin; tutarların kendisi değişmez.
+CARD_EXPENSE_NAMES = ["Akbank Kredi Kartı F", "Akbank A", "Ziraat A", "İşbank F"]
+FIXED_EXPENSE_NAMES = ["Eminevim", "Colendi"]
 total_income = sum(float(v or 0) for v in income.values())
 total_expenses = sum(float(v or 0) for v in expenses.values())
 net_cash = total_income - total_expenses
@@ -1026,16 +1111,38 @@ elif page == PAGE_BUDGET:
         add_income_name = st.text_input("➕ Yeni gelir kalemi", placeholder="Örn. sınav görevi")
         add_income_value = st.number_input("Yeni gelir tutarı (TL)", min_value=0.0, step=100.0, key="add_income_amount_combined")
         st.markdown("---")
-        section("🧾", "Borçlar ve aylık ödemeler", "Yalnızca aylık tutarları güncelle; ödeme durumunu ayrıca takip etmiyoruz.")
+        section("🧾", "Borçlar ve aylık ödemeler", "Kart borçları solda, sabit ödemeler sağda. F = Fatih, A = Asiye.")
         new_expenses = dict(expenses)
-        for i, (name, amount) in enumerate(list(expenses.items())):
-            new_expenses[name] = st.number_input(
-                f"{name} (TL)", min_value=0.0, value=float(amount or 0), step=100.0,
-                key=f"exp_{selected_month}_{name}"
-            )
-        add_expense_name = st.text_input("➕ Yeni borç / gider kalemi", placeholder="Örn. yeni kredi kartı veya taksit")
-        add_expense_value = st.number_input("Yeni kalem tutarı (TL)", min_value=0.0, step=100.0, key="add_expense_amount_combined")
-        notes = st.text_area("Ay notu", value=budget.get("notes", ""), placeholder="Örn. ekstre arttı, taksit bitti...")
+        expense_left, expense_right = st.columns(2, gap="large")
+        with expense_left:
+            st.markdown("#### 💳 Kredi kartları")
+            for name in CARD_EXPENSE_NAMES:
+                amount = float(expenses.get(name, 0) or 0)
+                new_expenses[name] = st.number_input(
+                    f"{name} (TL)", min_value=0.0, value=amount, step=100.0,
+                    key=f"exp_{selected_month}_{name}"
+                )
+        with expense_right:
+            st.markdown("#### 🏠 Sabit borçlar")
+            for name in FIXED_EXPENSE_NAMES:
+                amount = float(expenses.get(name, 0) or 0)
+                new_expenses[name] = st.number_input(
+                    f"{name} (TL)", min_value=0.0, value=amount, step=100.0,
+                    key=f"exp_{selected_month}_{name}"
+                )
+            other_expenses = [(name, amount) for name, amount in expenses.items()
+                              if name not in CARD_EXPENSE_NAMES and name not in FIXED_EXPENSE_NAMES]
+            if other_expenses:
+                st.markdown("#### 📌 Diğer giderler")
+                for name, amount in other_expenses:
+                    new_expenses[name] = st.number_input(
+                        f"{name} (TL)", min_value=0.0, value=float(amount or 0), step=100.0,
+                        key=f"exp_{selected_month}_{name}"
+                    )
+        with st.expander("➕ Yeni borç / gider kalemi ekle", expanded=False):
+            add_expense_name = st.text_input("Kalem adı", placeholder="Örn. yeni kredi kartı veya taksit")
+            add_expense_value = st.number_input("Aylık tutar (TL)", min_value=0.0, step=100.0, key="add_expense_amount_combined")
+        notes = st.text_area("Ay notu", value=budget.get("notes", ""), placeholder="İsteğe bağlı ay notu")
         submitted = st.form_submit_button("💾 Bu ayın bütçesini kaydet", type="primary", width="stretch")
     if submitted:
         if add_income_name.strip():
