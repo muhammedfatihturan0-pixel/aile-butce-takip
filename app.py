@@ -86,12 +86,28 @@ label, [data-testid="stWidgetLabel"] p, [data-testid="stWidgetLabel"] label,
 .stButton>button, .stDownloadButton>button, [data-testid="stFormSubmitButton"] button {
   border-radius:11px; font-weight:650; min-height:2.55rem; transition:all .16s ease;
 }
-.stButton>button[kind="primary"], [data-testid="stFormSubmitButton"] button[kind="primary"] {
-  background:var(--accent)!important; border:1px solid var(--accent)!important;
-  color:#08221d!important; box-shadow:0 5px 14px rgba(101,226,194,.12);
+.stButton>button[kind="primary"],
+[data-testid="stFormSubmitButton"] button[kind="primary"],
+.stButton button[data-testid="stBaseButton-primary"],
+[data-testid="stFormSubmitButton"] button[data-testid="stBaseButton-primary"] {
+  background:#3158a8!important; background-image:none!important;
+  border:1px solid #5478c7!important; color:#ffffff!important;
+  -webkit-text-fill-color:#ffffff!important;
+  box-shadow:0 5px 14px rgba(19,43,91,.28);
 }
-.stButton>button[kind="primary"]:hover, [data-testid="stFormSubmitButton"] button[kind="primary"]:hover {
-  background:#83efd5!important; border-color:#83efd5!important; transform:translateY(-1px);
+.stButton>button[kind="primary"]:hover,
+[data-testid="stFormSubmitButton"] button[kind="primary"]:hover,
+.stButton button[data-testid="stBaseButton-primary"]:hover,
+[data-testid="stFormSubmitButton"] button[data-testid="stBaseButton-primary"]:hover {
+  background:#416bc0!important; border-color:#7e9bde!important;
+  color:#ffffff!important; -webkit-text-fill-color:#ffffff!important;
+  transform:translateY(-1px);
+}
+.stButton>button[kind="primary"]:disabled,
+[data-testid="stFormSubmitButton"] button[kind="primary"]:disabled,
+.stButton button[data-testid="stBaseButton-primary"]:disabled {
+  background:#29364b!important; border-color:#3c4b64!important;
+  color:#c0cad9!important; -webkit-text-fill-color:#c0cad9!important; opacity:.78;
 }
 .stButton>button:not([kind="primary"]), .stDownloadButton>button {
   background:#172337; border:1px solid var(--line); color:#e6eefb;
@@ -136,6 +152,41 @@ hr {border-color:var(--line);}
  .app-hero .period {float:none;display:inline-block;margin-bottom:12px;}
  [data-testid="stMetric"] {padding:12px;border-radius:13px;min-height:94px;}
 }
+
+/* High-contrast primary actions: never use bright mint/green behind white text. */
+button[data-testid="stBaseButton-primary"],
+[data-testid="stFormSubmitButton"] button[data-testid="stBaseButton-primary"],
+.stButton button[kind="primary"],
+[data-testid="stFormSubmitButton"] button[kind="primary"] {
+  background:#244b91 !important;
+  background-image:none !important;
+  border:1px solid #6388d2 !important;
+  color:#ffffff !important;
+  -webkit-text-fill-color:#ffffff !important;
+  opacity:1 !important;
+  box-shadow:0 4px 12px rgba(0,0,0,.22) !important;
+}
+button[data-testid="stBaseButton-primary"] *,
+[data-testid="stFormSubmitButton"] button[data-testid="stBaseButton-primary"] * {
+  color:#ffffff !important;
+  -webkit-text-fill-color:#ffffff !important;
+}
+button[data-testid="stBaseButton-primary"]:hover,
+[data-testid="stFormSubmitButton"] button[data-testid="stBaseButton-primary"]:hover {
+  background:#315fae !important;
+  border-color:#8ba8e2 !important;
+  color:#ffffff !important;
+  -webkit-text-fill-color:#ffffff !important;
+}
+button[data-testid="stBaseButton-primary"]:disabled,
+[data-testid="stFormSubmitButton"] button[data-testid="stBaseButton-primary"]:disabled {
+  background:#29364b !important;
+  border-color:#465777 !important;
+  color:#c7d2e5 !important;
+  -webkit-text-fill-color:#c7d2e5 !important;
+  opacity:.9 !important;
+}
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -445,6 +496,140 @@ def create_document(collection, data, doc_id=None):
     return fs_request("POST", url, params=params, json={"fields": to_fs_fields(data)})
 
 
+def month_closure_doc_id(uid, month_key):
+    return f"{uid}_month_closure_{month_key}"
+
+
+def get_month_closure(uid, month_key):
+    """Read the selected month's close state from the user's own app_meta document."""
+    return get_document("app_meta", month_closure_doc_id(uid, month_key)) or {}
+
+
+def set_month_closure(uid, month_key, closed, rows=None):
+    """Close/reopen a month and save a small snapshot for auditability."""
+    doc_id = month_closure_doc_id(uid, month_key)
+    existing = get_document("app_meta", doc_id)
+    now_iso = datetime.utcnow().isoformat(timespec="seconds")
+    payload = {
+        "ownerUid": uid,
+        "key": f"month_closure_{month_key}",
+        "month": month_key,
+        "closed": bool(closed),
+        "status": "Kapalı" if closed else "Açık",
+        "updatedAt": now_iso,
+    }
+    if closed:
+        if rows is None:
+            rows = load_transactions(uid, month_key)
+        ignored_types = {"payment", "card_payment", "kart ödemesi", "quick_total", "quick_expense"}
+        eligible = [r for r in rows if str(r.get("transactionType", "")).strip().lower() not in ignored_types]
+        payload["closedAt"] = now_iso
+        payload["transactionCount"] = len(eligible)
+        payload["totalAmount"] = round(sum(float(r.get("amount", 0) or 0) for r in eligible), 2)
+    else:
+        payload["reopenedAt"] = now_iso
+    if existing:
+        write_document("app_meta", doc_id, payload)
+    else:
+        create_document("app_meta", payload, doc_id=doc_id)
+    get_budget.clear()
+    load_transactions.clear()
+
+
+def render_category_summary(source_df, heading, empty_message):
+    """Show category/merchant totals in always-visible labels and tables; no hover/click needed."""
+    section("🧾", heading, "Tutarlar grafikte ve tabloda doğrudan görünür; üzerine gelmek gerekmez.")
+    if source_df is None or source_df.empty:
+        st.info(empty_message)
+        return
+    frame = source_df.copy()
+    amount_col = "amount" if "amount" in frame.columns else ("Tutar (TL)" if "Tutar (TL)" in frame.columns else None)
+    category_col = "category" if "category" in frame.columns else ("Ana Kategori" if "Ana Kategori" in frame.columns else None)
+    merchant_col = "merchant" if "merchant" in frame.columns else ("İşletme" if "İşletme" in frame.columns else None)
+    subcategory_col = "subcategory" if "subcategory" in frame.columns else ("Alt Kategori" if "Alt Kategori" in frame.columns else None)
+    type_col = "transactionType" if "transactionType" in frame.columns else ("İşlem Türü" if "İşlem Türü" in frame.columns else None)
+    if amount_col is None or category_col is None:
+        st.info(empty_message)
+        return
+    frame["__amount"] = pd.to_numeric(frame[amount_col], errors="coerce").fillna(0.0)
+    frame["__category"] = frame[category_col].fillna("Diğer").astype(str).replace("", "Diğer")
+    frame["__merchant"] = frame[merchant_col].fillna("Bilinmeyen işletme").astype(str).replace("", "Bilinmeyen işletme") if merchant_col else "Bilinmeyen işletme"
+    frame["__subcategory"] = frame[subcategory_col].fillna("").astype(str) if subcategory_col else ""
+    frame["__type"] = frame[type_col].fillna("").astype(str).str.strip().str.lower() if type_col else ""
+    payment_types = {"payment", "card_payment", "kart ödemesi", "kart odemesi", "quick_total", "quick_expense"}
+    general_sum_rows = frame[frame["__type"].isin({"quick_total", "quick_expense"})]
+    general_sum = float(general_sum_rows["__amount"].sum()) if not general_sum_rows.empty else 0.0
+    spend = frame[~frame["__type"].isin(payment_types)].copy()
+    if spend.empty:
+        c1, c2 = st.columns(2)
+        c1.metric("Ekstre / sınıflandırılmış işlem toplamı", money(0))
+        c2.metric("Genel toplam kaydı", money(general_sum))
+        st.info(empty_message)
+        return
+    category_summary = (spend.groupby("__category", as_index=False)
+                        .agg(amount=("__amount", "sum"), transaction_count=("__amount", "size"))
+                        .sort_values("amount", ascending=False))
+    total_net = float(spend["__amount"].sum())
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Net harcama toplamı", money(total_net))
+    c2.metric("Kategori sayısı", f"{len(category_summary)}")
+    c3.metric("İşlem sayısı", f"{len(spend)}")
+    if not general_sum_rows.empty:
+        st.caption(f"Kart/işletme ayrıntısı olmayan genel toplam kaydı ayrıca: {money(general_sum)} · Kategori ve işletme toplamına katılmadı.")
+
+    # Compact charts with visible labels, backed by tables below for exact values.
+    chart_left, chart_right = st.columns([0.9, 1.1], gap="large")
+    with chart_left:
+        st.markdown("#### Kategori tutarları")
+        cat_plot = category_summary.head(10).sort_values("amount", ascending=True).copy()
+        cat_plot["Tutar etiketi"] = cat_plot["amount"].map(money)
+        fig = px.bar(cat_plot, x="amount", y="__category", text="Tutar etiketi", orientation="h",
+                     template="plotly_dark", color_discrete_sequence=["#6388d2"])
+        max_cat = max([abs(float(x)) for x in cat_plot["amount"]] or [0])
+        fig.update_traces(textposition="outside", textfont=dict(color="#ffffff", size=11), cliponaxis=False,
+                          hovertemplate="%{y}<br>%{text}<extra></extra>")
+        fig.update_layout(height=max(230, min(390, 30 * len(cat_plot) + 60)),
+                          margin=dict(l=0, r=95, t=5, b=5), xaxis_title="TL", yaxis_title="",
+                          showlegend=False, font=dict(color="#edf4ff", size=11),
+                          xaxis=dict(range=[min(0, float(cat_plot["amount"].min())), max_cat * 1.45 if max_cat else 1]))
+        st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
+    merchant_summary = (spend.groupby(["__category", "__merchant", "__subcategory"], as_index=False)
+                        .agg(amount=("__amount", "sum"), transaction_count=("__amount", "size"))
+                        .sort_values("amount", ascending=False))
+    with chart_right:
+        st.markdown("#### İşletme tutarları · ilk 12")
+        merch_plot = merchant_summary.head(12).copy().sort_values("amount", ascending=True)
+        merch_plot["Tutar etiketi"] = merch_plot["amount"].map(money)
+        merch_plot["Etiket"] = merch_plot["__merchant"].astype(str).str.slice(0, 28)
+        fig = px.bar(merch_plot, x="amount", y="Etiket", text="Tutar etiketi", orientation="h",
+                     template="plotly_dark", color_discrete_sequence=["#43bda6"])
+        max_merch = max([abs(float(x)) for x in merch_plot["amount"]] or [0])
+        fig.update_traces(textposition="outside", textfont=dict(color="#ffffff", size=10), cliponaxis=False,
+                          hovertemplate="%{y}<br>%{text}<extra></extra>")
+        fig.update_layout(height=max(260, min(430, 29 * len(merch_plot) + 60)),
+                          margin=dict(l=0, r=100, t=5, b=5), xaxis_title="TL", yaxis_title="",
+                          showlegend=False, font=dict(color="#edf4ff", size=10),
+                          xaxis=dict(range=[min(0, float(merch_plot["amount"].min())), max_merch * 1.45 if max_merch else 1]))
+        st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
+
+    visible_categories = pd.DataFrame({
+        "Kategori": category_summary["__category"],
+        "Toplam (TL)": category_summary["amount"].map(money),
+        "İşlem adedi": category_summary["transaction_count"].astype(int),
+    })
+    with st.expander("Tüm kategorileri listele", expanded=True):
+        st.dataframe(visible_categories, hide_index=True, width="stretch", height=min(370, 42 + 36 * len(visible_categories)))
+    visible_merchants = pd.DataFrame({
+        "Kategori": merchant_summary["__category"],
+        "İşletme": merchant_summary["__merchant"],
+        "Alt kırılım": merchant_summary["__subcategory"].replace("", "—"),
+        "Toplam (TL)": merchant_summary["amount"].map(money),
+        "İşlem adedi": merchant_summary["transaction_count"].astype(int),
+    })
+    with st.expander("Tüm işletmeleri listele", expanded=False):
+        st.dataframe(visible_merchants, hide_index=True, width="stretch", height=min(430, 42 + 36 * len(visible_merchants)))
+
+
 def list_documents(collection, uid, limit=1000):
     """Query only by ownerUid. All other filtering/sorting is client-side to avoid composite-index crashes."""
     if collection not in COLLECTIONS:
@@ -481,6 +666,8 @@ def get_budget(uid, month_key):
 
 
 def save_budget(uid, month_key, data):
+    if get_month_closure(uid, month_key).get("closed"):
+        raise RuntimeError(f"{month_label_tr(month_key)} ayı kapalı. Değişiklik için önce Ekstre İçe Aktar bölümünden ayı yeniden aç.")
     payload = {
         "ownerUid": uid, "month": month_key, "income": data.get("income", {}),
         "expenses": data.get("expenses", {}), "notes": data.get("notes", ""),
@@ -537,6 +724,9 @@ def stable_dedupe_key(row):
 
 def add_transaction(uid, row):
     row = dict(row)
+    target_month = str(row.get("statementMonth") or row.get("month") or "")[:7]
+    if target_month and get_month_closure(uid, target_month).get("closed"):
+        raise RuntimeError(f"{month_label_tr(target_month)} ayı kapalı. Yeni işlem için önce ayı yeniden aç.")
     row["ownerUid"] = uid
     row["createdAt"] = datetime.utcnow().isoformat(timespec="seconds")
     row["dedupeKey"] = stable_dedupe_key(row)
@@ -1040,6 +1230,8 @@ page = st.session_state["app_page"]
 try:
     budget = get_budget(uid, selected_month) or default_budget(selected_month)
     tx_rows = load_transactions(uid, selected_month)
+    month_closure = get_month_closure(uid, selected_month)
+    month_closed = bool(month_closure.get("closed"))
 except Exception as exc:
     st.error(f"Firebase'e erişim başarısız: {exc}")
     st.info("Bu sürüm Firestore sorgularında yalnızca ownerUid alanını sunucu tarafında filtreler; böylece composite index hatası oluşmamalıdır. Kurallar yayımlandı mı ve API anahtarı doğru mu kontrol edin.")
@@ -1065,6 +1257,8 @@ total_income = sum(float(v or 0) for v in income.values())
 total_expenses = sum(float(v or 0) for v in expenses.values())
 net_cash = total_income - total_expenses
 month_label = month_label_tr(selected_month)
+if month_closed and page not in {PAGE_IMPORT}:
+    st.warning(f"🔒 {month_label} kapalı. Bu dönemin bütçesi ve yeni işlem aktarımları kilitli; düzeltme için Ekstre İçe Aktar bölümünden ayı yeniden aç.")
 
 if page == PAGE_HOME:
     title_hero(month_label, "Ailenin bütçesini, kart ekstrelerini ve harcamalarını tek ekrandan yönet.")
@@ -1146,7 +1340,7 @@ if page == PAGE_HOME:
                 format="%.2f", key="quick_card_total_amount",
             )
         st.caption(f"Seçili ay: {month_label}. Bu işlem yalnızca **{quick_card}** kaleminin aylık tutarını değiştirir. Mevcut tutar: {money(expenses.get(quick_card, 0))}. Harcama/ekstre işlem satırı eklenmez.")
-        if st.button("💾 Kart toplamını güncelle", type="primary", width="stretch", key="quick_update_card_total"):
+        if st.button("💾 Kart toplamını güncelle", type="primary", width="stretch", key="quick_update_card_total", disabled=month_closed):
             try:
                 updated_expenses = dict(expenses)
                 updated_expenses[quick_card] = float(quick_amount)
@@ -1161,12 +1355,12 @@ if page == PAGE_HOME:
             except Exception as exc:
                 st.error(f"Kart toplamı güncellenemedi: {exc}")
     else:
-        st.caption("Bu alan yalnızca kart ayrımı olmayan genel toplamı işlem defterine ekler. Ayrıntılı ekstrede aynı tutar varsa iki kez sayılmaması için yalnızca bir yöntemi kullan.")
+        st.caption("Bu alan yalnızca kart ayrımı olmayan genel toplam kaydı ekler. Ayrıntılı ekstrede aynı tutar varsa iki kez sayılmaması için yalnızca bir yöntemi kullan.")
         quick_general_amount = st.number_input(
             "Genel harcama toplamı (TL)", min_value=0.01, value=100.0,
             step=100.0, format="%.2f", key="quick_general_total_amount_v8",
         )
-        if st.button("➕ Genel toplam kaydını ekle", type="primary", width="stretch", key="quick_save_general_total_v8"):
+        if st.button("➕ Genel toplam kaydını ekle", type="primary", width="stretch", key="quick_save_general_total_v8", disabled=month_closed):
             today = today_tr()
             row = {
                 "date": today.isoformat(), "calendarMonth": today.strftime("%Y-%m"),
@@ -1187,46 +1381,22 @@ if page == PAGE_HOME:
 
     if st.session_state.get("quick_card_preference_error"):
         st.caption("Kart tercihi bu oturumda korundu ancak kalıcı kaydedilemedi. Firestore Rules içinde app_meta koleksiyonuna erişimi kontrol edin.")
-    left, right = st.columns([1, 1.15], gap="large")
+    left = st.container()
     with left:
         section("💰", "Gelir ve ödeme planı", "Aktif ayın özeti")
         all_items = [{"Tür": "Gelir", "Kalem": k, "Tutar (TL)": float(v or 0)} for k,v in income.items()]
         all_items += [{"Tür": "Ödeme", "Kalem": k, "Tutar (TL)": float(v or 0)} for k,v in expenses.items()]
         if all_items:
             bd = pd.DataFrame(all_items)
-            fig = px.bar(bd, x="Tutar (TL)", y="Kalem", color="Tür", orientation="h", barmode="group", template="plotly_dark", height=300)
-            fig.update_layout(margin=dict(l=0,r=10,t=5,b=5), legend_title_text="", xaxis_title="TL", yaxis_title="", font=dict(size=11))
-            st.plotly_chart(fig, width="stretch")
+            bd["Tutar etiketi"] = bd["Tutar (TL)"].map(money)
+            fig = px.bar(bd, x="Tutar (TL)", y="Kalem", color="Tür", text="Tutar etiketi", orientation="h", barmode="group", template="plotly_dark", height=300)
+            fig.update_traces(textposition="outside", textfont=dict(color="#ffffff", size=10), cliponaxis=False)
+            x_max = float(bd["Tutar (TL)"].max()) if not bd.empty else 0
+            fig.update_layout(margin=dict(l=0,r=100,t=5,b=5), legend_title_text="", xaxis_title="TL", yaxis_title="", font=dict(color="#edf4ff",size=11), xaxis=dict(range=[0, x_max * 1.4 if x_max else 1]))
+            st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
         else:
             st.info("Bu ayın bütçesini Bütçe ve Borçlar bölümünden girebilirsin.")
-    with right:
-        section("🛍️", "Kategori özeti", "Ekstrelerden çıkarılan işlemler")
-        if not txdf.empty and "category" in txdf:
-            filtered = txdf[~txdf.get("transactionType", pd.Series(index=txdf.index, dtype=str)).astype(str).str.lower().isin(["payment", "card_payment", "kart ödemesi"])].copy()
-            by_cat = filtered.groupby("category", as_index=False)["amount"].sum().sort_values("amount", ascending=False).head(7)
-            fig = px.bar(by_cat, x="amount", y="category", orientation="h", template="plotly_dark", color="amount", color_continuous_scale=["#4263eb", "#57e3c2"], height=300)
-            fig.update_layout(margin=dict(l=0,r=5,t=5,b=5), coloraxis_showscale=False, xaxis_title="TL", yaxis_title="", yaxis={"categoryorder":"total ascending"}, font=dict(size=11))
-            st.plotly_chart(fig, width="stretch")
-        else:
-            st.info("Ekstrelerini içe aktardığında kategori özeti burada oluşacak.")
-
-    section("🧭", "İşlem defteri", f"{month_label} · {len(tx_rows)} kayıt")
-    if not txdf.empty:
-        f1, f2 = st.columns([1, 1])
-        categories = ["Tümü"] + sorted(txdf.get("category", pd.Series(dtype=str)).dropna().astype(str).unique().tolist())
-        with f1:
-            filter_category = st.selectbox("Kategori filtresi", categories, key="home_tx_category")
-        with f2:
-            filter_owner = st.selectbox("Harcama sahibi", ["Tümü"] + OWNERS, key="home_tx_owner")
-        viewdf = txdf.copy()
-        if filter_category != "Tümü": viewdf = viewdf[viewdf["category"] == filter_category]
-        if filter_owner != "Tümü" and "owner" in viewdf: viewdf = viewdf[viewdf["owner"] == filter_owner]
-        display_map = {"date":"Tarih", "description":"Açıklama", "category":"Kategori", "merchant":"İşletme", "subcategory":"Alt kategori", "amount":"Tutar (TL)", "owner":"Harcama sahibi", "card":"Kart", "transactionType":"İşlem türü"}
-        visible = [c for c in display_map if c in viewdf.columns]
-        st.dataframe(viewdf[visible].rename(columns=display_map), hide_index=True, width="stretch", height=300)
-        st.download_button("⬇️ Bu ayın işlem defterini indir", viewdf[visible].rename(columns=display_map).to_csv(index=False).encode("utf-8-sig"), f"islem_defteri_{selected_month}.csv", "text/csv")
-    else:
-        st.info("Bu dönemde kayıt yok. Ekstre yükleyebilir veya yukarıdan hızlı nakit gideri ekleyebilirsin.")
+    # Kategori özetleri Ekstre İçe Aktar bölümünde gösterilir; işlem defteri Genel Bakıştan kaldırıldı.
 
     st.markdown("---")
     section("🧩", "Modüller", "İstediğin bölüme dokunarak geç. Soldaki menü sade tutuldu.")
@@ -1252,6 +1422,8 @@ if page == PAGE_HOME:
 
 elif page == PAGE_BUDGET:
     title_hero(month_label, "Gelirini, aylık borç tutarlarını ve ödeme durumunu tek ekrandan yönet.")
+    if month_closed:
+        st.warning(f"🔒 {month_label} ayı kapalı. Bütçe değerlerini değiştirmek için önce Ekstre İçe Aktar bölümünden ayı yeniden aç.")
     if selected_month < "2026-10":
         st.info("Bu geçmiş ay için bütçe kaydı yoksa sıfırdan girebilirsin. Başka ayların kayıtları değişmez.")
     with st.form("combined_budget_form", border=True):
@@ -1299,7 +1471,7 @@ elif page == PAGE_BUDGET:
             add_expense_name = st.text_input("Kalem adı", placeholder="Örn. yeni kredi kartı veya taksit")
             add_expense_value = st.number_input("Aylık tutar (TL)", min_value=0.0, step=100.0, key="add_expense_amount_combined")
         notes = st.text_area("Ay notu", value=budget.get("notes", ""), placeholder="İsteğe bağlı ay notu")
-        submitted = st.form_submit_button("💾 Bu ayın bütçesini kaydet", type="primary", width="stretch")
+        submitted = st.form_submit_button("💾 Bu ayın bütçesini kaydet", type="primary", width="stretch", disabled=month_closed)
     if submitted:
         if add_income_name.strip():
             new_income[add_income_name.strip()] = add_income_value
@@ -1323,13 +1495,51 @@ elif page == PAGE_BUDGET:
     st.caption("Bu ekran Genel Bakış'taki aylık tutarlarla aynı kaydı kullanır; ayrı bir Borçlar ve Ödemeler modülü yoktur. Geçmiş ayları seçerek geriye dönük bütçe girebilirsin.")
 
 elif page == "📥 Ekstre İçe Aktar":
-    title_hero("Ekstre merkezi", "Mayıs–Ekim 2026 geçmiş Axess işlemleri ilk girişte otomatik yüklenir; yeni ekstreleri buradan ekleyebilirsin.")
+    title_hero("Ekstre merkezi", "Ekstreleri yükle, kategori ve işletme toplamlarını doğrudan gör, dönem sonunda ayı kapat.")
+
+    # The amount tables stay visible on this page; users do not need to click charts to see values.
+    import_summary_df = pd.DataFrame(tx_rows)
+    render_category_summary(import_summary_df, f"{month_label} kategori özeti", "Bu ay için henüz ekstre işlemi yok. Ekstreyi yükleyip kaydettikten sonra kategori ve işletme tutarları burada görünür.")
+
+    section("🔒", "Ay kapanışı", f"Seçili dönem: {month_label}")
+    current_month_statements = [s for s in safe_load_collection(uid, "statements") if str(s.get("month", "")) == selected_month]
+    closed_card_statements = [s for s in current_month_statements if s.get("closed") or s.get("status") in ["Kesildi", "Ödendi"]]
+    st.caption(f"Bu dönemde {len(closed_card_statements)} kart ekstresi kapalı. Kart ekstrelerini kontrol edip ardından ayı kapatabilirsin.")
+    if month_closed:
+        st.warning(f"🔒 {month_label} kapalı. Yeni ekstre aktarımı ve bütçe değişiklikleri engellendi.")
+        if st.button("🔓 Ayı yeniden aç", key=f"reopen_month_{selected_month}", width="stretch"):
+            try:
+                set_month_closure(uid, selected_month, False)
+                # Reopening the month also reopens its per-card statements so corrections/imports can proceed.
+                for statement in current_month_statements:
+                    if statement.get("closed") or statement.get("status") in ["Kesildi", "Ödendi"]:
+                        sid = statement.get("id") or f"{uid}_{selected_month}_{re.sub(r'[^a-zA-Z0-9]+','-',str(statement.get('card','Kart'))).strip('-').lower()}"
+                        write_document("statements", sid, {"ownerUid": uid, "month": selected_month, "card": str(statement.get("card", "")), "status": "Açık", "closed": False, "updatedAt": datetime.utcnow().isoformat(timespec="seconds")})
+                st.success(f"{month_label} yeniden açıldı. Gerekli düzeltmeleri yapıp kapatabilirsin.")
+                st.rerun()
+            except Exception as exc:
+                st.error(f"Ay yeniden açılamadı: {exc}")
+    else:
+        st.caption("Kart ekstrelerini ve kategori toplamlarını kontrol ettikten sonra ayı kapat. Kapanınca bu döneme yeni ekstre aktarılamaz, bütçe ve kart toplamları değiştirilemez; gerekirse yeniden açabilirsin.")
+        confirm_month_close = st.checkbox(
+            f"{month_label} ekstrelerini kontrol ettim; ayı kapatmaya hazırım.",
+            key=f"confirm_month_close_{selected_month}",
+        )
+        if st.button("🔒 Ayı kapat", key=f"close_month_{selected_month}", type="primary", width="stretch", disabled=not confirm_month_close):
+            try:
+                set_month_closure(uid, selected_month, True, tx_rows)
+                st.success(f"{month_label} kapatıldı. Bu dönem artık kilitli.")
+                st.rerun()
+            except Exception as exc:
+                st.error(f"Ay kapatılamadı: {exc}")
+
+    st.divider()
     st.warning("PDF ekstreleri OCR ile okunur. Tutarı otomatik doğrulanamayan satırlar varsayılan olarak işaretli değildir; kontrol etmeden içe aktarma. Tapu harçları, bilinen vergi dairesi taksitleri, kart borcu ödemeleri ve chip-para düzeltmeleri otomatik hariç bırakılır.")
     col1, col2 = st.columns([1.1, 1])
     registered_cards_for_import = safe_load_collection(uid, "cards")
     registered_names_for_import = [str(c.get("name", "")).strip() for c in registered_cards_for_import if c.get("name")]
     with col1:
-        statement_month_fallback = st.selectbox("Dosya adından dönem bulunamazsa kullanılacak ekstre ayı", month_options, index=month_options.index(current_month))
+        statement_month_fallback = st.selectbox("Dosya adından dönem bulunamazsa kullanılacak ekstre ayı", month_options, index=month_options.index(selected_month))
         if registered_names_for_import:
             card_choice_import = st.selectbox("Ekstre hangi karta ait?", registered_names_for_import + ["➕ Listede olmayan kart"], key="import_card_choice")
             if card_choice_import == "➕ Listede olmayan kart":
@@ -1344,8 +1554,8 @@ elif page == "📥 Ekstre İçe Aktar":
             st.success("Yapay zekâ sınıflandırması hazır.")
         else:
             st.info("Yapay zekâ anahtarı henüz eklenmemiş; kurallı sınıflandırma kullanılacak.")
-    uploads = st.file_uploader("Bir veya birden fazla ekstre seç", type=["pdf", "csv", "xlsx", "xls"], accept_multiple_files=True)
-    if uploads and st.button("🔎 Dosyaları oku ve önizleme oluştur", type="primary", width="stretch"):
+    uploads = st.file_uploader("Bir veya birden fazla ekstre seç", type=["pdf", "csv", "xlsx", "xls"], accept_multiple_files=True, disabled=month_closed)
+    if uploads and not month_closed and st.button("🔎 Dosyaları oku ve önizleme oluştur", type="primary", width="stretch", disabled=month_closed):
         frames, excluded_frames, parse_errors = [], [], []
         progress = st.progress(0, text="Dosyalar hazırlanıyor...")
         card_owner_default = next((str(c.get("owner", "Belirsiz")) for c in registered_cards_for_import if str(c.get("name", "")).strip() == card_name), "Belirsiz")
@@ -1383,7 +1593,8 @@ elif page == "📥 Ekstre İçe Aktar":
         if combined.empty and not parse_errors: st.warning("İşlem satırı bulunamadı.")
     preview = st.session_state.get("import_preview")
     if preview is not None and not preview.empty:
-        st.markdown("### 1. İşlemleri kontrol et")
+        render_category_summary(preview, "Yüklenen ekstrelerin önizleme özeti", "Önizlemede sınıflandırılacak işlem bulunamadı.")
+        st.markdown("### İşlem satırlarını kontrol et")
         st.caption(f"{len(preview)} işlem hazır. 'Ekstre Ayı' karşılaştırma dönemidir; taksitli işlemlerde görünen asıl işlem tarihi daha eski olabilir.")
         columns = ["Ekstre Ayı", "İşlem Tarihi", "Açıklama", "Tutar (TL)", "Ana Kategori", "İşletme", "Alt Kategori", "Harcama Sahibi", "Kart", "İşlem Türü", "Tutar Güveni", "Kontrol", "Dahil", "sourceRowId", "Dosya"]
         edit_cols = [c for c in columns if c in preview.columns]
@@ -1399,7 +1610,7 @@ elif page == "📥 Ekstre İçe Aktar":
         )
         a, b = st.columns([1,1])
         with a:
-            if st.button("✨ Yapay zekâyla kategorileri düzelt", disabled=not bool(AI.get("api_key")), width="stretch"):
+            if st.button("✨ Yapay zekâyla kategorileri düzelt", disabled=(not bool(AI.get("api_key")) or month_closed), width="stretch"):
                 try:
                     with st.spinner("İşletme ve kategoriler sınıflandırılıyor..."):
                         st.session_state["import_preview"] = ai_classify_dataframe(editable.copy())
@@ -1408,7 +1619,7 @@ elif page == "📥 Ekstre İçe Aktar":
                 except Exception as exc:
                     st.error(f"Sınıflandırma başarısız: {exc}")
         with b:
-            if st.button("💾 Onaylanan işlemleri Firebase'e kaydet", type="primary", width="stretch"):
+            if st.button("💾 Onaylanan işlemleri Firebase'e kaydet", type="primary", width="stretch", disabled=month_closed):
                 saveable = editable[editable["Dahil"].astype(bool)].copy()
                 saved, duplicates, skipped = 0, 0, 0
                 try:
@@ -1416,6 +1627,9 @@ elif page == "📥 Ekstre İçe Aktar":
                     existing_keys = {x.get("dedupeKey") for x in existing}
                     closed_statements = safe_load_collection(uid, "statements")
                     closed_keys = {(str(s.get("month", "")), str(s.get("card", ""))) for s in closed_statements if s.get("closed") or s.get("status") in ["Kesildi", "Ödendi"]}
+                    months_to_check = sorted({str(x)[:7] for x in saveable.get("Ekstre Ayı", pd.Series([statement_month_fallback])).dropna().astype(str)})
+                    month_closure_map = {m: get_month_closure(uid, m) for m in months_to_check}
+                    closed_month_keys = {m for m, meta in month_closure_map.items() if meta.get("closed")}
                     progress = st.progress(0, text="Kayıtlar Firebase'e aktarılıyor...")
                     locked_rows = 0
                     for idx, (_, r) in enumerate(saveable.iterrows()):
@@ -1431,7 +1645,7 @@ elif page == "📥 Ekstre İçe Aktar":
                         owner = str(r.get("Harcama Sahibi", "Belirsiz"))
                         if owner not in OWNERS: owner = "Belirsiz"
                         row_card = str(r.get("Kart", card_name))[:100]
-                        if (statement_month, row_card) in closed_keys:
+                        if statement_month in closed_month_keys or (statement_month, row_card) in closed_keys:
                             locked_rows += 1
                             continue
                         row = {
@@ -1453,8 +1667,9 @@ elif page == "📥 Ekstre İçe Aktar":
                         progress.progress((idx+1)/max(1,len(saveable)), text=f"Kaydediliyor: {idx+1}/{len(saveable)}")
                     st.success(f"Aktarım tamamlandı: {saved} yeni işlem, {duplicates} mükerrer atlandı, {skipped} eksik satır atlandı.")
                     if locked_rows:
-                        st.warning(f"{locked_rows} işlem kaydedilmedi: ilgili kartın bu aya ait ekstresi kapatılmış. Gerekliyse Kartlar ve Ekstreler bölümünden ekstreyi yeniden açıp aktarımı tekrarla.")
+                        st.warning(f"{locked_rows} işlem kaydedilmedi; ilgili ay veya kart ekstresi kapalı. Ekstre İçe Aktar bölümünden ayı, gerekirse Kartlar ve Ekstreler bölümünden kart ekstresini yeniden açıp aktarımı tekrarla.")
                     st.session_state.pop("import_preview", None)
+                    load_transactions.clear()
                     st.rerun()
                 except Exception as exc:
                     st.error(f"Aktarım durdu: {exc}. Bir kısmı kaydedilmiş olabilir; aynı dosyayı tekrar yüklersen sourceRowId ile mükerrer kontrolü yapılır.")
@@ -1466,6 +1681,8 @@ elif page == "📥 Ekstre İçe Aktar":
 
 elif page == "💳 Kartlar ve Ekstreler":
     title_hero(month_label, "Kartları kişiye göre ayır, ekstreyi tek dokunuşla kapat ve dönem toplamını sabitle.")
+    if month_closed:
+        st.info("Bu ay genel olarak kapatılmış. Kart ekstrelerinde değişiklik yapmak için Ekstre İçe Aktar bölümünden önce ayı yeniden aç.")
     cards = safe_load_collection(uid, "cards")
     statements = safe_load_collection(uid, "statements")
     existing_statement_map = {(str(s.get("month", "")), str(s.get("card", ""))): s for s in statements}
@@ -1541,7 +1758,7 @@ elif page == "💳 Kartlar ve Ekstreler":
                             st.info("🟢 Ekstre açık")
                     with c2:
                         if current_statement and (current_statement.get("closed") or current_statement.get("status") in ["Kesildi", "Ödendi"]):
-                            if st.button("🔓 Ekstreyi yeniden aç", key=f"reopen_{selected_month}_{name}", width="stretch"):
+                            if st.button("🔓 Ekstreyi yeniden aç", key=f"reopen_{selected_month}_{name}", width="stretch", disabled=month_closed):
                                 try:
                                     sid = current_statement.get("id") or f"{uid}_{selected_month}_{re.sub(r'[^a-zA-Z0-9]+','-',name).strip('-').lower()}"
                                     write_document("statements", sid, {"ownerUid":uid,"month":selected_month,"card":name,"cardOwner":owner_text,"status":"Açık","closed":False,"updatedAt":datetime.utcnow().isoformat(timespec="seconds")})
@@ -1550,7 +1767,7 @@ elif page == "💳 Kartlar ve Ekstreler":
                                 except Exception as exc:
                                     st.error(f"Ekstre açılamadı: {exc}")
                         else:
-                            if st.button("🔒 Ekstreyi kapat", key=f"close_{selected_month}_{name}", type="primary", width="stretch"):
+                            if st.button("🔒 Ekstreyi kapat", key=f"close_{selected_month}_{name}", type="primary", width="stretch", disabled=month_closed):
                                 slug = re.sub(r"[^a-zA-Z0-9]+", "-", name).strip("-").lower()
                                 sid = f"{uid}_{selected_month}_{slug}"
                                 cutoff, due = scheduled_statement_dates(selected_month, card_item.get("cutoffDay", 7), card_item.get("dueDay", 17))
@@ -1608,17 +1825,23 @@ elif page == "🔎 Harcama Analizi":
             section("🏪", "İşletme bazında", "A101, BİM, Migros ve diğer işletmeler ayrı ayrı")
             if not dff.empty and "merchant" in dff:
                 md = dff.groupby("merchant", as_index=False)["amount"].sum().sort_values("amount", ascending=False).head(15)
-                fig = px.bar(md, x="amount", y="merchant", orientation="h", template="plotly_dark", color="amount", color_continuous_scale=["#6c8cff","#57e3c2"])
-                fig.update_layout(height=380, margin=dict(l=0,r=0,t=5,b=5), coloraxis_showscale=False, xaxis_title="TL", yaxis_title="", yaxis={"categoryorder":"total ascending"})
-                st.plotly_chart(fig, width="stretch")
+                md = md.copy()
+                md["Tutar etiketi"] = md["amount"].map(money)
+                fig = px.bar(md, x="amount", y="merchant", text="Tutar etiketi", orientation="h", template="plotly_dark", color="amount", color_continuous_scale=["#6388d2","#43bda6"])
+                fig.update_traces(textposition="outside", textfont=dict(color="#ffffff", size=10), cliponaxis=False)
+                xmax = float(md["amount"].max()) if not md.empty else 0
+                fig.update_layout(height=380, margin=dict(l=0,r=95,t=5,b=5), coloraxis_showscale=False, xaxis_title="TL", yaxis_title="", yaxis={"categoryorder":"total ascending"}, xaxis=dict(range=[min(0,float(md["amount"].min())), xmax*1.4 if xmax else 1]), font=dict(color="#edf4ff",size=10))
+                st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
         with right:
             section("📈", "Aylık hareket", "Seçili aralıkta kategori / işletme eğilimi")
             if not dff.empty:
                 group_field = "merchant" if selected_merchant == "Tümü" and category_filter != "Tümü" else "category"
                 tr = dff.groupby(["month", group_field], as_index=False)["amount"].sum()
-                fig = px.line(tr, x="month", y="amount", color=group_field, markers=True, template="plotly_dark")
-                fig.update_layout(height=380, margin=dict(l=0,r=0,t=5,b=5), xaxis_title="Ekstre ayı", yaxis_title="TL", legend_title_text="")
-                st.plotly_chart(fig, width="stretch")
+                tr["Tutar etiketi"] = tr["amount"].map(money)
+                fig = px.line(tr, x="month", y="amount", color=group_field, markers=True, text="Tutar etiketi", template="plotly_dark")
+                fig.update_traces(textposition="top center", textfont=dict(color="#ffffff", size=9), cliponaxis=False)
+                fig.update_layout(height=380, margin=dict(l=0,r=10,t=24,b=5), xaxis_title="Ekstre ayı", yaxis_title="TL", legend_title_text="", font=dict(color="#edf4ff",size=10))
+                st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
         section("🔍", "İşlem detayları", "Kategori filtresinin altındaki tüm işlemler")
         st.dataframe(dff[[c for c in ["month","date","description","category","merchant","subcategory","amount","owner","card","transactionType"] if c in dff.columns]].sort_values(["month","date"], ascending=[False,False]), hide_index=True, width="stretch", height=420)
         st.download_button("⬇️ Filtrelenmiş işlemleri indir", dff.to_csv(index=False).encode("utf-8-sig"), "harcama_analizi.csv", "text/csv")
@@ -1647,9 +1870,15 @@ elif page == "📊 Ay Karşılaştırma":
             compare["Değişim (%)"] = compare.apply(lambda r: ((r["Fark (TL)"] / abs(r["Önceki ay"])) * 100) if r["Önceki ay"] else (100.0 if r["Seçili ay"] else 0.0), axis=1)
             compare = compare.sort_values("Fark (TL)", ascending=False)
             st.dataframe(compare.reset_index(names="Kategori / işletme").style.format({"Önceki ay": "{:,.2f}", "Seçili ay": "{:,.2f}", "Fark (TL)": "{:,.2f}", "Değişim (%)": "{:+.1f}%"}), hide_index=True, width="stretch")
-            fig = px.bar(compare.reset_index(names="Kalem").head(15), x="Kalem", y="Fark (TL)", color="Fark (TL)", color_continuous_scale=["#57e3c2","#6c8cff"], template="plotly_dark")
-            fig.update_layout(height=380, margin=dict(l=0,r=0,t=5,b=5), coloraxis_showscale=False, xaxis_title="", yaxis_title="Fark (TL)")
-            st.plotly_chart(fig, width="stretch")
+            compare_plot = compare.reset_index(names="Kalem").head(15).copy()
+            compare_plot["Fark etiketi"] = compare_plot["Fark (TL)"].map(money)
+            fig = px.bar(compare_plot, x="Kalem", y="Fark (TL)", text="Fark etiketi", color="Fark (TL)", color_continuous_scale=["#6388d2","#43bda6"], template="plotly_dark")
+            fig.update_traces(textposition="outside", textfont=dict(color="#ffffff", size=10), cliponaxis=False)
+            ymin = float(compare_plot["Fark (TL)"].min()) if not compare_plot.empty else 0
+            ymax = float(compare_plot["Fark (TL)"].max()) if not compare_plot.empty else 0
+            pad = max(abs(ymin), abs(ymax), 1) * .28
+            fig.update_layout(height=380, margin=dict(l=0,r=12,t=26,b=5), coloraxis_showscale=False, xaxis_title="", yaxis_title="Fark (TL)", font=dict(color="#edf4ff",size=10), yaxis=dict(range=[ymin-pad, ymax+pad]))
+            st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
             st.caption("Karşılaştırmalar ekstre ayına göre yapılır. Taksitler, harcamanın özgün tarihi eski olsa bile içinde bulunduğu ekstre dönemine göre raporlanır.")
 
 elif page == "⚙️ Veri Yönetimi":

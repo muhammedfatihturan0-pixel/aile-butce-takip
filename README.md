@@ -1,13 +1,16 @@
-# Aile Bütçe Takip v8 — Kart toplamını güncelleme
+# Aile Bütçe Takip v10 — okunabilir grafikler ve ay kapanışı
 
-## Hızlı tutar alanı
-- Varsayılan seçenek `Kart toplamını güncelle` olur.
-- Kart seçimi ilk olarak `Akbank Kredi Kartı F` seçeneğini gösterir.
-- Tutar kutusu, seçilen ay ve kartın kayıtlı bütçe tutarıyla otomatik dolar. Örnek: Akbank Kredi Kartı F için 49.900 TL girip kaydetmek, seçili ayın `expenses["Akbank Kredi Kartı F"]` tutarını 49.900 TL ile değiştirir; yeni harcama/işlem satırı oluşturmaz.
-- Kart seçimi kullanıcı değiştirene kadar hatırlanır.
-- `Genel harcama toplamı ekle` ikinci seçenektir; bu tutarı ayrı ve kart ayrımı olmayan işlem kaydı olarak ekler.
+## Yapılanlar
+- Primary buttons use dark navy-blue with white high-contrast text.
+- Category summary is in the Ekstre İçe Aktar page; category and merchant amounts show in visible chart labels and tables without clicking/hovering.
+- Home finance chart and Harcama Analizi / Ay Karşılaştırma charts also show value labels directly.
+- The separate transaction ledger is absent from Genel Bakış; detailed rows remain in import review and analysis where they are useful.
+- The selected-month "Ayı kapat" button is in Ekstre İçe Aktar. A confirmation checkbox is required before closure. Closed months block uploads and budget/card-total edits; month can be reopened from the same page.
+- Firebase rules remain user-scoped by ownerUid. Do not make the Firestore database public.
 
-## Dağıtım
-GitHub deposundaki `app.py` dosyasını bu sürümle değiştirin. Gerekirse bağımlılık dosyalarını da birlikte yükleyin. Güvenlik kurallarını herkese açık yapmayın.
+## Deploy
+Replace GitHub files `app.py`, `requirements.txt`, and `packages.txt` with those in this package. Then publish `firestore.rules` in Firebase Console → Firestore Database → Rules. Refresh/redeploy Streamlit.
 
-Bu paket geçmiş ekstre Excel'ini içermez; kişisel finansal hareketler public depoya eklenmemelidir.
+Bank statements and the processed Excel workbook are intentionally not bundled, since the GitHub repository is public. Upload the processed Excel only through the app's import module if needed.
+
+Python syntax checked. Live Firebase/Streamlit end-to-end verification has not been performed.
