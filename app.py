@@ -23,29 +23,84 @@ _cookie_manager = stx.CookieManager(key="aile_butce_auth_cookie")
 # ---------- Modern dashboard styling ----------
 st.markdown(r"""
 <style>
-:root { --aqua:#57e3c2; --blue:#6c8cff; --panel:#151b2b; --muted:#a7b2c8; }
-.block-container {padding-top:1.1rem; padding-bottom:2.5rem; max-width:1500px;}
-[data-testid="stSidebar"] { border-right:1px solid rgba(148,163,184,.14); }
-[data-testid="stSidebar"] .block-container {padding-top:1.4rem;}
-[data-testid="stMetric"] {background:linear-gradient(135deg,rgba(108,140,255,.13),rgba(87,227,194,.07)); border:1px solid rgba(148,163,184,.15); padding:15px 17px; border-radius:16px;}
-[data-testid="stMetricLabel"] {color:#aeb8ca; font-size:.88rem;}
-[data-testid="stMetricValue"] {font-weight:750; letter-spacing:-.035em;}
-.stButton>button, .stDownloadButton>button {border-radius:11px; font-weight:650; min-height:2.55rem;}
-[data-testid="stForm"] {border:1px solid rgba(148,163,184,.17); border-radius:16px; padding:1rem; background:rgba(128,128,128,.025);}
-[data-testid="stDataFrame"] {border:1px solid rgba(148,163,184,.16); border-radius:12px; overflow:hidden;}
-.app-hero {border-radius:22px; padding:26px 30px; margin:0 0 1.2rem 0; color:white; background:radial-gradient(circle at 88% 10%,rgba(87,227,194,.30),transparent 28%),linear-gradient(125deg,#12182b 0%,#202c4b 53%,#263b5a 100%); border:1px solid rgba(148,163,184,.23); box-shadow:0 18px 40px rgba(0,0,0,.16);}
-.app-hero .eyebrow {font-size:.77rem; letter-spacing:.15em; text-transform:uppercase; color:#91f4dc; font-weight:800;}
-.app-hero h1 {margin:.45rem 0 .4rem 0; font-size:2rem; line-height:1.12; letter-spacing:-.045em; color:white;}
-.app-hero p {margin:0; color:#c7d1e4; font-size:.96rem;}
-.app-hero .period {float:right; padding:8px 13px; border-radius:999px; font-size:.8rem; font-weight:700; color:#e7fff8; border:1px solid rgba(145,244,220,.36); background:rgba(87,227,194,.1);}
-.section-head {display:flex; gap:12px; align-items:center; margin:1rem 0 .4rem 0;}
-.section-icon {display:inline-flex; align-items:center; justify-content:center; width:40px;height:40px;border-radius:13px; background:linear-gradient(145deg,rgba(108,140,255,.22),rgba(87,227,194,.16)); border:1px solid rgba(148,163,184,.18); font-size:1.2rem;}
-.section-title {font-weight:800;font-size:1.2rem;letter-spacing:-.02em;}
-.section-sub {font-size:.84rem;color:var(--muted);margin-top:2px;}
-.small-muted {font-size:.82rem;color:var(--muted);}
-.kpi-note {font-size:.79rem;color:#aab5c8; margin-top:4px;}
-.pill {display:inline-block; background:rgba(87,227,194,.1);border:1px solid rgba(87,227,194,.25); color:#8cf2d8; padding:5px 9px;border-radius:999px;font-size:.77rem;font-weight:700;}
-hr {border-color:rgba(148,163,184,.16);}
+:root {
+  --bg: #0b1220;
+  --surface: #111b2b;
+  --surface-2: #162337;
+  --line: rgba(159,181,210,.15);
+  --text: #edf4ff;
+  --muted: #91a2bc;
+  --accent: #65e2c2;
+  --accent-2: #8aa8ff;
+}
+.block-container {padding-top:1.15rem; padding-bottom:2.4rem; max-width:1420px;}
+[data-testid="stAppViewContainer"] {background:radial-gradient(ellipse at 78% 0%, rgba(38,75,107,.18), transparent 34%), var(--bg);}
+[data-testid="stHeader"] {background:transparent;}
+[data-testid="stSidebar"] {background:#0e1726; border-right:1px solid var(--line);}
+[data-testid="stSidebar"] .block-container {padding-top:1.3rem;}
+[data-testid="stSidebar"] hr {margin:1.1rem 0; border-color:var(--line);}
+[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {color:#c2cee0;}
+[data-testid="stMetric"] {
+  background:linear-gradient(145deg,rgba(22,35,55,.96),rgba(16,27,43,.96));
+  border:1px solid var(--line); padding:16px 18px; border-radius:17px;
+  box-shadow:0 8px 24px rgba(0,0,0,.12); min-height:112px;
+}
+[data-testid="stMetricLabel"] {color:#a9bad1; font-size:.84rem;}
+[data-testid="stMetricValue"] {font-weight:760; letter-spacing:-.04em; font-size:clamp(1.25rem,2vw,1.8rem);}
+[data-testid="stMetricDelta"] {font-size:.78rem;}
+.stButton>button, .stDownloadButton>button, [data-testid="stFormSubmitButton"] button {
+  border-radius:11px; font-weight:650; min-height:2.55rem; transition:all .16s ease;
+}
+.stButton>button[kind="primary"], [data-testid="stFormSubmitButton"] button[kind="primary"] {
+  background:var(--accent)!important; border:1px solid var(--accent)!important;
+  color:#08221d!important; box-shadow:0 5px 14px rgba(101,226,194,.12);
+}
+.stButton>button[kind="primary"]:hover, [data-testid="stFormSubmitButton"] button[kind="primary"]:hover {
+  background:#83efd5!important; border-color:#83efd5!important; transform:translateY(-1px);
+}
+.stButton>button:not([kind="primary"]), .stDownloadButton>button {
+  background:#172337; border:1px solid var(--line); color:#e6eefb;
+}
+.stButton>button:not([kind="primary"]):hover, .stDownloadButton>button:hover {
+  border-color:rgba(101,226,194,.55); color:var(--accent);
+}
+[data-testid="stForm"] {
+  border:1px solid var(--line); border-radius:16px; padding:1rem;
+  background:rgba(17,27,43,.72);
+}
+[data-testid="stDataFrame"] {border:1px solid var(--line); border-radius:12px; overflow:hidden;}
+[data-testid="stTextInput"] input, [data-testid="stNumberInput"] input,
+[data-testid="stSelectbox"] [data-baseweb="select"] > div,
+[data-testid="stDateInput"] input, [data-testid="stTextArea"] textarea {
+  border-radius:10px!important;
+}
+[data-testid="stExpander"] {border:1px solid var(--line); border-radius:13px; overflow:hidden;}
+[data-testid="stAlert"] {border-radius:12px;}
+.app-hero {
+  position:relative; overflow:hidden; border-radius:22px; padding:25px 29px; margin:0 0 1.15rem 0;
+  color:white; background:linear-gradient(115deg,#121d31 0%,#192b43 63%,#183c43 100%);
+  border:1px solid rgba(146,178,210,.2); box-shadow:0 16px 34px rgba(0,0,0,.14);
+}
+.app-hero:after {content:"";position:absolute;right:-58px;top:-115px;width:260px;height:260px;border-radius:50%;border:1px solid rgba(101,226,194,.16);box-shadow:0 0 0 28px rgba(101,226,194,.025),0 0 0 58px rgba(101,226,194,.02);}
+.app-hero .eyebrow {font-size:.7rem;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);font-weight:850;}
+.app-hero h1 {margin:.55rem 0 .42rem 0;font-size:clamp(1.55rem,2.4vw,2.1rem);line-height:1.12;letter-spacing:-.045em;color:white;}
+.app-hero p {margin:0;color:#c1cee0;font-size:.94rem;max-width:780px;}
+.app-hero .period {float:right;position:relative;z-index:1;padding:7px 11px;border-radius:10px;font-size:.78rem;font-weight:750;color:#c8fff1;border:1px solid rgba(101,226,194,.25);background:rgba(101,226,194,.08);}
+.section-head {display:flex;gap:11px;align-items:center;margin:1.2rem 0 .55rem 0;}
+.section-icon {display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:12px;background:#172b3a;border:1px solid rgba(101,226,194,.18);font-size:1.12rem;}
+.section-title {font-weight:800;font-size:1.08rem;letter-spacing:-.025em;color:#edf4ff;}
+.section-sub {font-size:.81rem;color:var(--muted);margin-top:2px;}
+.small-muted {font-size:.8rem;color:var(--muted);}
+.kpi-note {font-size:.78rem;color:var(--muted);margin-top:4px;}
+.pill {display:inline-block;background:rgba(101,226,194,.09);border:1px solid rgba(101,226,194,.23);color:#8df0d7;padding:5px 9px;border-radius:999px;font-size:.74rem;font-weight:750;}
+hr {border-color:var(--line);}
+[data-testid="stVerticalBlockBorderWrapper"] {border-color:var(--line)!important;border-radius:15px!important;}
+@media (max-width: 800px) {
+ .block-container {padding-top:.65rem;padding-left:1rem;padding-right:1rem;}
+ .app-hero {padding:20px;border-radius:17px;}
+ .app-hero .period {float:none;display:inline-block;margin-bottom:12px;}
+ [data-testid="stMetric"] {padding:12px;border-radius:13px;min-height:94px;}
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -186,16 +241,16 @@ def login(email, password, remember_device=False):
         "remember_device": bool(remember_device),
     }
     if remember_device:
-        _cookie_manager.set("fb_refresh_token", data["refreshToken"],
-                            expires_at=datetime.now() + timedelta(days=30),
-                            same_site="lax", secure=True)
-        _cookie_manager.set("fb_user_email", data.get("email", email),
-                            expires_at=datetime.now() + timedelta(days=30),
-                            same_site="lax", secure=True)
+        _cookie_manager.set(
+            "fb_session",
+            json.dumps({"refresh_token": data["refreshToken"], "email": data.get("email", email)}),
+            expires_at=datetime.now() + timedelta(days=30),
+            same_site="lax",
+            secure=True,
+        )
     else:
         try:
-            _cookie_manager.delete("fb_refresh_token")
-            _cookie_manager.delete("fb_user_email")
+            _cookie_manager.delete("fb_session")
         except Exception:
             pass
 
@@ -206,33 +261,42 @@ def restore_auth_from_cookie():
         return True
     try:
         cookies = _cookie_manager.get_all() or {}
-        refresh_token = cookies.get("fb_refresh_token")
-        email = cookies.get("fb_user_email", "")
+        raw_session = cookies.get("fb_session")
+        if not raw_session:
+            return False
+        saved = json.loads(raw_session)
+        refresh_token = saved.get("refresh_token", "")
+        email = saved.get("email", "")
         if not refresh_token:
             return False
         response = requests.post(
             f"https://securetoken.googleapis.com/v1/token?key={API_KEY}",
-            data={"grant_type": "refresh_token", "refresh_token": refresh_token}, timeout=20,
+            data={"grant_type": "refresh_token", "refresh_token": refresh_token},
+            timeout=20,
         )
         if response.status_code != 200:
             try:
-                _cookie_manager.delete("fb_refresh_token")
-                _cookie_manager.delete("fb_user_email")
+                _cookie_manager.delete("fb_session")
             except Exception:
                 pass
             return False
         data = response.json()
+        new_refresh_token = data.get("refresh_token", refresh_token)
         st.session_state["auth"] = {
             "id_token": data["id_token"],
-            "refresh_token": data.get("refresh_token", refresh_token),
+            "refresh_token": new_refresh_token,
             "uid": data.get("user_id", ""),
             "email": email,
             "expires_at": time.time() + int(data.get("expires_in", 3600)) - 60,
             "remember_device": True,
         }
-        _cookie_manager.set("fb_refresh_token", st.session_state["auth"]["refresh_token"],
-                            expires_at=datetime.now() + timedelta(days=30),
-                            same_site="lax", secure=True)
+        _cookie_manager.set(
+            "fb_session",
+            json.dumps({"refresh_token": new_refresh_token, "email": email}),
+            expires_at=datetime.now() + timedelta(days=30),
+            same_site="lax",
+            secure=True,
+        )
         return bool(st.session_state["auth"]["uid"])
     except Exception:
         return False
@@ -247,8 +311,7 @@ def logout():
     for key in ["auth", "import_preview", "import_source_name", "quick_card_preference_loaded", "quick_card_preference"]:
         st.session_state.pop(key, None)
     try:
-        _cookie_manager.delete("fb_refresh_token")
-        _cookie_manager.delete("fb_user_email")
+        _cookie_manager.delete("fb_session")
     except Exception:
         pass
     st.rerun()
@@ -275,9 +338,13 @@ def get_id_token():
     st.session_state["auth"] = auth
     if auth.get("remember_device"):
         try:
-            _cookie_manager.set("fb_refresh_token", auth["refresh_token"],
-                                expires_at=datetime.now() + timedelta(days=30),
-                                same_site="lax", secure=True)
+            _cookie_manager.set(
+                "fb_session",
+                json.dumps({"refresh_token": auth["refresh_token"], "email": auth.get("email", "")}),
+                expires_at=datetime.now() + timedelta(days=30),
+                same_site="lax",
+                secure=True,
+            )
         except Exception:
             pass
     return auth["id_token"]
@@ -976,7 +1043,15 @@ if page == PAGE_HOME:
     st.markdown("### ⚡ Hızlı tutar kaydı")
     quick_cards = safe_load_collection(uid, "cards")
     quick_card_names = [str(c.get("name", "")).strip() for c in quick_cards if str(c.get("name", "")).strip()]
-    quick_card_options = ["Nakit / banka kartı"] + quick_card_names
+    # Kartlar koleksiyonu henüz oluşturulmamış veya Firestore kuralı eksik olsa bile
+    # hızlı kayıtta kullanılabilsin diye temel kartlar listelenir.
+    default_quick_cards = [
+        "Akbank Kredi Kartı F",
+        "Akbank A",
+        "Ziraat A",
+        "İşbank F",
+    ]
+    quick_card_options = ["Nakit / banka kartı"] + list(dict.fromkeys(default_quick_cards + quick_card_names))
 
     # Kart tercihi Firestore'da saklanır; kullanıcı değiştirene kadar korunur.
     preference_key = "quick_card_preference"

@@ -1,10 +1,7 @@
-# Aile Bütçe Takip
+# Aile Bütçe Takip — Yeni tasarım
 
-Bu sürümde giriş ekranında **Bu cihazda oturumu açık tut (30 gün)** seçeneği vardır. Parola saklanmaz; Firebase oturum yenileme belirteci tarayıcı çerezinde tutulur. Ortak cihazlarda seçeneği kapatın ve Güvenli çıkış kullanın.
+Bu sürümde daha kompakt, koyu lacivert/yeşil vurgulu arayüz uygulanmıştır. Kırmızı buton görünümü yerine yumuşak turkuaz vurgu, daha dengeli kartlar, daha kompakt başlıklar ve mobil uyumlu boşluklar kullanılır.
 
-Streamlit Cloud Secrets örneği:
-```toml
-[firebase]
-project_id = "YOUR_FIREBASE_PROJECT_ID"
-api_key = "YOUR_FIREBASE_WEB_API_KEY"
-```
+Ayrıca cihazda oturumu hatırlama çerezi tek bileşen olarak tutulur; aynı çalıştırmada birden fazla çerez set çağrısının oluşturabildiği aynı-key hatası önlenmiştir.
+
+GitHub'daki app.py ve requirements.txt dosyalarını bu pakettekilerle değiştirin.
