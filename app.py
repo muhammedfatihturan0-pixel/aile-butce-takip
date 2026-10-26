@@ -143,7 +143,8 @@ CATEGORIES = [
     "Market", "Faturalar", "Ulaşım", "Ulaşım / Seyahat", "Restoran / Yemek",
     "Giyim", "Çocuk", "Sağlık", "Ev / Yaşam", "Eğitim / Kırtasiye",
     "Online alışveriş", "Dijital abonelik", "Dijital abonelik / Oyun", "Kişisel bakım",
-    "Bankacılık ücreti", "Resmi ödeme", "Kişisel alışveriş", "Taksit", "İade", "Kontrol edilecek", "Diğer"
+    "Bankacılık ücreti", "Resmi ödeme", "Kişisel alışveriş", "Taksit", "İade", "Kontrol edilecek",
+    "Toplam harcama", "Kart toplamı", "Diğer"
 ]
 OWNERS = ["Ben", "Eşim", "Ortak", "Diğer", "Belirsiz"]
 COLLECTIONS = {"monthly_budgets", "transactions", "cards", "statements", "app_meta"}
@@ -279,13 +280,14 @@ def login(email, password, remember_device=False):
         _cookie_manager.set(
             "fb_session",
             json.dumps({"refresh_token": data["refreshToken"], "email": data.get("email", email)}),
-            expires_at=datetime.now() + timedelta(days=30),
+            key="set_login_session",
+            expires_at=datetime.now() + timedelta(days=365),
             same_site="lax",
             secure=True,
         )
     else:
         try:
-            _cookie_manager.delete("fb_session")
+            _cookie_manager.delete("fb_session", key="delete_login_session")
         except Exception:
             pass
 
@@ -295,7 +297,7 @@ def restore_auth_from_cookie():
     if st.session_state.get("auth"):
         return True
     try:
-        cookies = _cookie_manager.get_all() or {}
+        cookies = _cookie_manager.get_all(key="read_saved_session_cookie") or {}
         raw_session = cookies.get("fb_session")
         if not raw_session:
             return False
@@ -311,7 +313,7 @@ def restore_auth_from_cookie():
         )
         if response.status_code != 200:
             try:
-                _cookie_manager.delete("fb_session")
+                _cookie_manager.delete("fb_session", key="delete_expired_session")
             except Exception:
                 pass
             return False
@@ -328,7 +330,8 @@ def restore_auth_from_cookie():
         _cookie_manager.set(
             "fb_session",
             json.dumps({"refresh_token": new_refresh_token, "email": email}),
-            expires_at=datetime.now() + timedelta(days=30),
+            key="set_restored_session",
+            expires_at=datetime.now() + timedelta(days=365),
             same_site="lax",
             secure=True,
         )
@@ -346,7 +349,7 @@ def logout():
     for key in ["auth", "import_preview", "import_source_name", "quick_card_preference_loaded", "quick_card_preference"]:
         st.session_state.pop(key, None)
     try:
-        _cookie_manager.delete("fb_session")
+        _cookie_manager.delete("fb_session", key="delete_logout_session")
     except Exception:
         pass
     st.rerun()
@@ -376,7 +379,8 @@ def get_id_token():
             _cookie_manager.set(
                 "fb_session",
                 json.dumps({"refresh_token": auth["refresh_token"], "email": auth.get("email", "")}),
-                expires_at=datetime.now() + timedelta(days=30),
+                key="set_refreshed_session",
+                expires_at=datetime.now() + timedelta(days=365),
                 same_site="lax",
                 secure=True,
             )
@@ -963,7 +967,7 @@ def login_view():
     with st.form("login_form"):
         email = st.text_input("E-posta", autocomplete="email")
         password = st.text_input("Şifre", type="password", autocomplete="current-password")
-        remember_device = st.checkbox("Bu cihazda oturumu açık tut (30 gün)", value=True)
+        remember_device = st.checkbox("Bu cihazda oturumu açık tut (1 yıl)", value=True)
         submit = st.form_submit_button("Güvenli giriş", width="stretch", type="primary")
     if submit:
         if not API_KEY or not PROJECT_ID:
@@ -1078,29 +1082,28 @@ if page == PAGE_HOME:
     st.markdown("### ⚡ Hızlı tutar kaydı")
     quick_cards = safe_load_collection(uid, "cards")
     quick_card_names = [str(c.get("name", "")).strip() for c in quick_cards if str(c.get("name", "")).strip()]
-    # Kartlar koleksiyonu henüz oluşturulmamış veya Firestore kuralı eksik olsa bile
-    # hızlı kayıtta kullanılabilsin diye temel kartlar listelenir.
-    default_quick_cards = [
-        "Akbank Kredi Kartı F",
-        "Akbank A",
-        "Ziraat A",
-        "İşbank F",
-    ]
-    quick_card_options = ["Nakit / banka kartı"] + list(dict.fromkeys(default_quick_cards + quick_card_names))
+    # Cash is not a selectable pseudo-card. Most quick entries are aggregate totals.
+    default_quick_cards = ["Akbank Kredi Kartı F", "Akbank A", "Ziraat A", "İşbank F"]
+    quick_card_options = list(dict.fromkeys(default_quick_cards + quick_card_names))
+    general_total_card = "Genel toplam (kart ayrımı yok)"
 
-    # Kart tercihi Firestore'da saklanır; kullanıcı değiştirene kadar korunur.
+    # Card choice is remembered in Firestore and remains selected until the user changes it.
     preference_key = "quick_card_preference"
     if not st.session_state.get("quick_card_preference_loaded"):
         try:
             preference_doc = get_document("app_meta", f"{uid}_quick_card_preference")
-            saved_card = str((preference_doc or {}).get("card", "Nakit / banka kartı"))
-            st.session_state[preference_key] = saved_card if saved_card in quick_card_options else quick_card_options[0]
+            saved_card = str((preference_doc or {}).get("card", quick_card_options[0] if quick_card_options else "Akbank Kredi Kartı F"))
+            if saved_card in {"Nakit / banka kartı", general_total_card}:
+                saved_card = quick_card_options[0] if quick_card_options else "Akbank Kredi Kartı F"
+            if saved_card and saved_card not in quick_card_options:
+                quick_card_options.append(saved_card)
+            st.session_state[preference_key] = saved_card
         except Exception:
             st.session_state[preference_key] = quick_card_options[0]
         st.session_state["quick_card_preference_loaded"] = True
 
     def persist_quick_card_preference():
-        selected_card = st.session_state.get(preference_key, "Nakit / banka kartı")
+        selected_card = st.session_state.get(preference_key, quick_card_options[0] if quick_card_options else "Akbank Kredi Kartı F")
         doc_id = f"{uid}_quick_card_preference"
         payload = {"ownerUid": uid, "key": "quick_card_preference", "card": selected_card,
                    "updatedAt": datetime.utcnow().isoformat(timespec="seconds")}
@@ -1110,37 +1113,57 @@ if page == PAGE_HOME:
                 write_document("app_meta", doc_id, payload)
             else:
                 create_document("app_meta", payload, doc_id=doc_id)
+            st.session_state.pop("quick_card_preference_error", None)
         except Exception as exc:
             st.session_state["quick_card_preference_error"] = str(exc)
 
+    quick_mode = st.radio(
+        "Kayıt biçimi",
+        ["Toplam tutar (genel)", "Kart / hesap toplamı"],
+        horizontal=True,
+        index=0,
+        key="quick_record_mode",
+        help="Genel toplamı tek kayıt olarak giriyorsan kart ayrımı yapılmaz. Belirli bir karta ait tutarsa ikinci seçeneği kullan.",
+    )
     quick_a, quick_b = st.columns([1, 1.5])
     with quick_a:
         quick_amount = st.number_input("Tutar (TL)", min_value=0.01, value=100.0, step=10.0,
                                        format="%.2f", key="quick_amount_home")
     with quick_b:
-        quick_card = st.selectbox("Kart / hesap", quick_card_options, key=preference_key,
-                                  on_change=persist_quick_card_preference)
+        if quick_mode == "Kart / hesap toplamı":
+            quick_card = st.selectbox("Kart", quick_card_options, key=preference_key,
+                                      on_change=persist_quick_card_preference)
+        else:
+            quick_card = general_total_card
+            st.text_input("Kart", value="Genel toplam — kart ayrımı yok", disabled=True, key="quick_general_total_label")
+    st.caption("Genel toplam kayıtları toplam harcamaya eklenir; işletme bazlı ekstre ayrıntısı yerine geçmez. Aynı tutar ayrıntılı ekstrede de varsa iki kez sayılmaması için yalnızca bir yöntemi kullan.")
 
     with st.form("quick_amount_home_form", border=True):
-        quick_save = st.form_submit_button("➕ Bugünün giderini kaydet", type="primary", width="stretch")
+        quick_save = st.form_submit_button("➕ Bugünün tutarını kaydet", type="primary", width="stretch")
     if quick_save:
         today = today_tr()
-        row = {"date": today.isoformat(), "calendarMonth": today.strftime("%Y-%m"), "month": today.strftime("%Y-%m"),
-               "statementMonth": today.strftime("%Y-%m"), "amount": float(quick_amount),
-               "description": "Hızlı gider — sınıflandırılacak", "category": "Kontrol edilecek", "merchant": "Sınıflandırılacak",
-               "subcategory": "Hızlı kayıt", "owner": "Belirsiz", "card": quick_card,
-               "transactionType": "quick_expense", "sourceRowId": ""}
+        is_general_total = quick_mode == "Toplam tutar (genel)"
+        row = {
+            "date": today.isoformat(), "calendarMonth": today.strftime("%Y-%m"), "month": today.strftime("%Y-%m"),
+            "statementMonth": today.strftime("%Y-%m"), "amount": float(quick_amount),
+            "description": "Genel toplam harcama" if is_general_total else "Kart toplamı — ayrıntısız kayıt",
+            "category": "Toplam harcama" if is_general_total else "Kart toplamı",
+            "merchant": "Genel toplam" if is_general_total else "Kart toplamı (ayrıntısız)",
+            "subcategory": "Toplu tutar kaydı" if is_general_total else "Kart toplamı kaydı",
+            "owner": "Belirsiz", "card": quick_card,
+            "transactionType": "quick_total" if is_general_total else "quick_card_total", "sourceRowId": "",
+        }
         try:
             added = add_transaction(uid, row)
             if added:
-                st.success(f"{money(quick_amount)} gider bugünün tarihiyle ({today.strftime('%d.%m.%Y')}) kaydedildi.")
+                st.success(f"{money(quick_amount)} tutar bugünün tarihiyle ({today.strftime('%d.%m.%Y')}) kaydedildi.")
             else:
                 st.warning("Aynı kayıt zaten mevcut.")
             st.rerun()
         except Exception as exc:
-            st.error(f"Hızlı gider kaydedilemedi: {exc}")
+            st.error(f"Tutar kaydedilemedi: {exc}")
     if st.session_state.get("quick_card_preference_error"):
-        st.caption("Kart tercihi bu oturumda korundu ancak kalıcı kaydedilemedi. Firestore kurallarını kontrol edin.")
+        st.caption("Kart tercihi bu oturumda korundu ancak kalıcı kaydedilemedi. Firestore Rules içinde app_meta koleksiyonuna erişim iznini kontrol edin.")
     left, right = st.columns([1, 1.15], gap="large")
     with left:
         section("💰", "Gelir ve ödeme planı", "Aktif ayın özeti")
