@@ -1,1 +1,0 @@
-# No apt packages required for text-based PDF parsing.
