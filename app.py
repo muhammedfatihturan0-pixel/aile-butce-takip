@@ -1079,31 +1079,28 @@ if page == PAGE_HOME:
     c3.metric("✨ Planlanan kalan", money(net_cash))
     c4.metric("💳 Kart harcaması", money(statement_spend))
 
-    st.markdown("### ⚡ Hızlı tutar kaydı")
+    st.markdown("### ⚡ Hızlı tutar")
     quick_cards = safe_load_collection(uid, "cards")
     quick_card_names = [str(c.get("name", "")).strip() for c in quick_cards if str(c.get("name", "")).strip()]
-    # Cash is not a selectable pseudo-card. Most quick entries are aggregate totals.
+    # Varsayılan kartlar Firestore'da henüz kayıtlı olmasalar bile hızlı seçimde görünür.
     default_quick_cards = ["Akbank Kredi Kartı F", "Akbank A", "Ziraat A", "İşbank F"]
     quick_card_options = list(dict.fromkeys(default_quick_cards + quick_card_names))
-    general_total_card = "Genel toplam (kart ayrımı yok)"
-
-    # Card choice is remembered in Firestore and remains selected until the user changes it.
     preference_key = "quick_card_preference"
+
+    # Kart seçimi Firestore'da saklanır ve kullanıcı değiştirene kadar korunur.
     if not st.session_state.get("quick_card_preference_loaded"):
         try:
             preference_doc = get_document("app_meta", f"{uid}_quick_card_preference")
-            saved_card = str((preference_doc or {}).get("card", quick_card_options[0] if quick_card_options else "Akbank Kredi Kartı F"))
-            if saved_card in {"Nakit / banka kartı", general_total_card}:
-                saved_card = quick_card_options[0] if quick_card_options else "Akbank Kredi Kartı F"
-            if saved_card and saved_card not in quick_card_options:
-                quick_card_options.append(saved_card)
-            st.session_state[preference_key] = saved_card
+            saved_card = str((preference_doc or {}).get("card", quick_card_options[0]))
         except Exception:
-            st.session_state[preference_key] = quick_card_options[0]
+            saved_card = quick_card_options[0]
+        if saved_card not in quick_card_options:
+            quick_card_options.append(saved_card)
+        st.session_state[preference_key] = saved_card
         st.session_state["quick_card_preference_loaded"] = True
 
     def persist_quick_card_preference():
-        selected_card = st.session_state.get(preference_key, quick_card_options[0] if quick_card_options else "Akbank Kredi Kartı F")
+        selected_card = st.session_state.get(preference_key, quick_card_options[0])
         doc_id = f"{uid}_quick_card_preference"
         payload = {"ownerUid": uid, "key": "quick_card_preference", "card": selected_card,
                    "updatedAt": datetime.utcnow().isoformat(timespec="seconds")}
@@ -1117,53 +1114,79 @@ if page == PAGE_HOME:
         except Exception as exc:
             st.session_state["quick_card_preference_error"] = str(exc)
 
+    # Varsayılan davranış kartın mevcut aylık tutarını düzenlemektir.
+    # Kart veya ay değiştiğinde ilgili kayıttaki mevcut değer otomatik doldurulur.
+    selected_card_for_prefill = st.session_state.get(preference_key, quick_card_options[0])
+    quick_amount_context = f"{selected_month}|{selected_card_for_prefill}"
+    if st.session_state.get("_quick_card_amount_context") != quick_amount_context:
+        st.session_state["quick_card_total_amount"] = float(expenses.get(selected_card_for_prefill, 0) or 0)
+        st.session_state["_quick_card_amount_context"] = quick_amount_context
+
     quick_mode = st.radio(
-        "Kayıt biçimi",
-        ["Toplam tutar (genel)", "Kart / hesap toplamı"],
+        "Ne kaydedeceksin?",
+        ["Kart toplamını güncelle", "Genel harcama toplamı ekle"],
         horizontal=True,
         index=0,
-        key="quick_record_mode",
-        help="Genel toplamı tek kayıt olarak giriyorsan kart ayrımı yapılmaz. Belirli bir karta ait tutarsa ikinci seçeneği kullan.",
+        key="quick_total_mode_v8",
+        help="İlk seçenek seçili kartın bu aya ait borç/ekstre toplamını değiştirir; yeni harcama satırı oluşturmaz. İkinci seçenek kart ayrımı olmayan bir genel toplam kaydı ekler.",
     )
-    quick_a, quick_b = st.columns([1, 1.5])
-    with quick_a:
-        quick_amount = st.number_input("Tutar (TL)", min_value=0.01, value=100.0, step=10.0,
-                                       format="%.2f", key="quick_amount_home")
-    with quick_b:
-        if quick_mode == "Kart / hesap toplamı":
-            quick_card = st.selectbox("Kart", quick_card_options, key=preference_key,
-                                      on_change=persist_quick_card_preference)
-        else:
-            quick_card = general_total_card
-            st.text_input("Kart", value="Genel toplam — kart ayrımı yok", disabled=True, key="quick_general_total_label")
-    st.caption("Genel toplam kayıtları toplam harcamaya eklenir; işletme bazlı ekstre ayrıntısı yerine geçmez. Aynı tutar ayrıntılı ekstrede de varsa iki kez sayılmaması için yalnızca bir yöntemi kullan.")
 
-    with st.form("quick_amount_home_form", border=True):
-        quick_save = st.form_submit_button("➕ Bugünün tutarını kaydet", type="primary", width="stretch")
-    if quick_save:
-        today = today_tr()
-        is_general_total = quick_mode == "Toplam tutar (genel)"
-        row = {
-            "date": today.isoformat(), "calendarMonth": today.strftime("%Y-%m"), "month": today.strftime("%Y-%m"),
-            "statementMonth": today.strftime("%Y-%m"), "amount": float(quick_amount),
-            "description": "Genel toplam harcama" if is_general_total else "Kart toplamı — ayrıntısız kayıt",
-            "category": "Toplam harcama" if is_general_total else "Kart toplamı",
-            "merchant": "Genel toplam" if is_general_total else "Kart toplamı (ayrıntısız)",
-            "subcategory": "Toplu tutar kaydı" if is_general_total else "Kart toplamı kaydı",
-            "owner": "Belirsiz", "card": quick_card,
-            "transactionType": "quick_total" if is_general_total else "quick_card_total", "sourceRowId": "",
-        }
-        try:
-            added = add_transaction(uid, row)
-            if added:
-                st.success(f"{money(quick_amount)} tutar bugünün tarihiyle ({today.strftime('%d.%m.%Y')}) kaydedildi.")
-            else:
-                st.warning("Aynı kayıt zaten mevcut.")
-            st.rerun()
-        except Exception as exc:
-            st.error(f"Tutar kaydedilemedi: {exc}")
+    if quick_mode == "Kart toplamını güncelle":
+        quick_a, quick_b = st.columns([1.15, 1.5])
+        with quick_a:
+            quick_card = st.selectbox(
+                "Kart / hesap",
+                quick_card_options,
+                key=preference_key,
+                on_change=persist_quick_card_preference,
+            )
+        with quick_b:
+            quick_amount = st.number_input(
+                "Güncel kart toplamı (TL)", min_value=0.0, step=100.0,
+                format="%.2f", key="quick_card_total_amount",
+            )
+        st.caption(f"Seçili ay: {month_label}. Bu işlem yalnızca **{quick_card}** kaleminin aylık tutarını değiştirir. Mevcut tutar: {money(expenses.get(quick_card, 0))}. Harcama/ekstre işlem satırı eklenmez.")
+        if st.button("💾 Kart toplamını güncelle", type="primary", width="stretch", key="quick_update_card_total"):
+            try:
+                updated_expenses = dict(expenses)
+                updated_expenses[quick_card] = float(quick_amount)
+                save_budget(uid, selected_month, {
+                    "income": income,
+                    "expenses": updated_expenses,
+                    "notes": budget.get("notes", ""),
+                    "debtMeta": budget.get("debtMeta", {}) or {},
+                })
+                st.success(f"{quick_card} tutarı {month_label} için {money(quick_amount)} olarak güncellendi.")
+                st.rerun()
+            except Exception as exc:
+                st.error(f"Kart toplamı güncellenemedi: {exc}")
+    else:
+        st.caption("Bu alan yalnızca kart ayrımı olmayan genel toplamı işlem defterine ekler. Ayrıntılı ekstrede aynı tutar varsa iki kez sayılmaması için yalnızca bir yöntemi kullan.")
+        quick_general_amount = st.number_input(
+            "Genel harcama toplamı (TL)", min_value=0.01, value=100.0,
+            step=100.0, format="%.2f", key="quick_general_total_amount_v8",
+        )
+        if st.button("➕ Genel toplam kaydını ekle", type="primary", width="stretch", key="quick_save_general_total_v8"):
+            today = today_tr()
+            row = {
+                "date": today.isoformat(), "calendarMonth": today.strftime("%Y-%m"),
+                "month": today.strftime("%Y-%m"), "statementMonth": today.strftime("%Y-%m"),
+                "amount": float(quick_general_amount),
+                "description": "Genel toplam harcama (ayrıntısız)",
+                "category": "Toplam harcama", "merchant": "Genel toplam",
+                "subcategory": "Toplu tutar kaydı", "owner": "Belirsiz",
+                "card": "Genel toplam (kart ayrımı yok)",
+                "transactionType": "quick_total", "sourceRowId": "",
+            }
+            try:
+                add_transaction(uid, row)
+                st.success(f"{money(quick_general_amount)} genel toplam kaydı eklendi.")
+                st.rerun()
+            except Exception as exc:
+                st.error(f"Genel toplam kaydedilemedi: {exc}")
+
     if st.session_state.get("quick_card_preference_error"):
-        st.caption("Kart tercihi bu oturumda korundu ancak kalıcı kaydedilemedi. Firestore Rules içinde app_meta koleksiyonuna erişim iznini kontrol edin.")
+        st.caption("Kart tercihi bu oturumda korundu ancak kalıcı kaydedilemedi. Firestore Rules içinde app_meta koleksiyonuna erişimi kontrol edin.")
     left, right = st.columns([1, 1.15], gap="large")
     with left:
         section("💰", "Gelir ve ödeme planı", "Aktif ayın özeti")

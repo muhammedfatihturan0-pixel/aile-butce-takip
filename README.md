@@ -1,18 +1,13 @@
-# Aile Bütçe Takip — kolay kullanım ve oturum hatırlama
+# Aile Bütçe Takip v8 — Kart toplamını güncelleme
 
-## Yapılanlar
-- CookieManager `set`, `delete` ve `get_all` çağrılarına benzersiz widget anahtarları eklendi; aynı `key='set'` hatası önlenir.
-- Giriş ekranındaki “Bu cihazda oturumu açık tut (1 yıl)” seçeneği, parolayı saklamadan Firebase yenileme belirtecini çerezde saklar. Uygulamada oturum açma kaldırılmamıştır; halka açık finans uygulamasında bu, başkalarının aile bütçesine erişmesini önler.
-- Hızlı kayıt varsayılan olarak “Toplam tutar (genel)” modunda açılır. “Kart / hesap toplamı” seçilirse kart seçilir. Nakit/banka kartı seçeneği kaldırılmıştır.
-- Kart seçimi Firestore `app_meta` alanında saklanıp kullanıcı değiştirene kadar korunur.
-- Daha okunaklı kontrast ve modern arayüz korunmuştur.
+## Hızlı tutar alanı
+- Varsayılan seçenek `Kart toplamını güncelle` olur.
+- Kart seçimi ilk olarak `Akbank Kredi Kartı F` seçeneğini gösterir.
+- Tutar kutusu, seçilen ay ve kartın kayıtlı bütçe tutarıyla otomatik dolar. Örnek: Akbank Kredi Kartı F için 49.900 TL girip kaydetmek, seçili ayın `expenses["Akbank Kredi Kartı F"]` tutarını 49.900 TL ile değiştirir; yeni harcama/işlem satırı oluşturmaz.
+- Kart seçimi kullanıcı değiştirene kadar hatırlanır.
+- `Genel harcama toplamı ekle` ikinci seçenektir; bu tutarı ayrı ve kart ayrımı olmayan işlem kaydı olarak ekler.
 
 ## Dağıtım
-1. `app.py`, `requirements.txt` ve `packages.txt` dosyalarını GitHub deposunda değiştirin.
-2. Firebase Console → Firestore Database → Rules alanında `firestore.rules` içeriğini yayımlayın.
-3. Streamlit yeniden başladıktan sonra kişisel tarayıcınızda bir kez giriş yapın ve oturum hatırlama seçeneğini açık bırakın. Normal kullanımda aynı tarayıcıda bir yıl boyunca yeniden parola istememesi gerekir; çıkış yaparsanız, çerezleri temizlerseniz veya Firebase oturumu iptal edilirse tekrar giriş gerekir.
+GitHub deposundaki `app.py` dosyasını bu sürümle değiştirin. Gerekirse bağımlılık dosyalarını da birlikte yükleyin. Güvenlik kurallarını herkese açık yapmayın.
 
-## Geçmiş ekstreler
-Geçmiş işlem dosyası bu ZIP'e bilerek eklenmemiştir; depo herkese açık olduğundan tüm kart hareketlerini GitHub'a koymak istemeyebiliriz. `Axess_Gecmis_Ekstre_Aktarim.xlsx` dosyasını uygulamanın **Ekstre İçe Aktar** ekranından bir kez yükleyin. Dosyayı GitHub'a yüklemeyin.
-
-**Güvenlik:** Firestore kurallarını herkese açık yapmayın. `firestore.rules` yalnızca oturum açmış kullanıcının `ownerUid` ile eşleşen belgelerine erişim verir.
+Bu paket geçmiş ekstre Excel'ini içermez; kişisel finansal hareketler public depoya eklenmemelidir.
