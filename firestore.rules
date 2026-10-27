@@ -1,13 +1,77 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    function signedIn() { return request.auth != null; }
-    function ownsExisting() { return signedIn() && resource.data.ownerUid == request.auth.uid; }
-    function ownsNew() { return signedIn() && request.resource.data.ownerUid == request.auth.uid; }
-    match /monthly_budgets/{docId} { allow read, delete: if ownsExisting(); allow create: if ownsNew(); allow update: if ownsExisting() && ownsNew(); }
-    match /transactions/{docId} { allow read, delete: if ownsExisting(); allow create: if ownsNew(); allow update: if ownsExisting() && ownsNew(); }
-    match /cards/{docId} { allow read, delete: if ownsExisting(); allow create: if ownsNew(); allow update: if ownsExisting() && ownsNew(); }
-    match /statements/{docId} { allow read, delete: if ownsExisting(); allow create: if ownsNew(); allow update: if ownsExisting() && ownsNew(); }
-    match /app_meta/{docId} { allow read, delete: if ownsExisting(); allow create: if ownsNew(); allow update: if ownsExisting() && ownsNew(); }
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function ownsExistingDocument() {
+      return signedIn() && resource.data.ownerUid == request.auth.uid;
+    }
+
+    function ownsNewDocument() {
+      return signedIn() && request.resource.data.ownerUid == request.auth.uid;
+    }
+
+    function ownsUpdatedDocument() {
+      return ownsExistingDocument()
+        && request.resource.data.ownerUid == request.auth.uid;
+    }
+
+    // Monthly budgets: a signed-in user may read their own records.
+    match /monthly_budgets/{docId} {
+      allow get: if signedIn() && (
+        !exists(/databases/$(database)/documents/monthly_budgets/$(docId))
+        || resource.data.ownerUid == request.auth.uid
+      );
+      allow list, delete: if ownsExistingDocument();
+      allow create: if ownsNewDocument();
+      allow update: if ownsUpdatedDocument();
+    }
+
+    // Individual spending transactions.
+    match /transactions/{docId} {
+      allow get: if signedIn() && (
+        !exists(/databases/$(database)/documents/transactions/$(docId))
+        || resource.data.ownerUid == request.auth.uid
+      );
+      allow list, delete: if ownsExistingDocument();
+      allow create: if ownsNewDocument();
+      allow update: if ownsUpdatedDocument();
+    }
+
+    // Cards / accounts.
+    match /cards/{docId} {
+      allow get: if signedIn() && (
+        !exists(/databases/$(database)/documents/cards/$(docId))
+        || resource.data.ownerUid == request.auth.uid
+      );
+      allow list, delete: if ownsExistingDocument();
+      allow create: if ownsNewDocument();
+      allow update: if ownsUpdatedDocument();
+    }
+
+    // Per-card statements.
+    match /statements/{docId} {
+      allow get: if signedIn() && (
+        !exists(/databases/$(database)/documents/statements/$(docId))
+        || resource.data.ownerUid == request.auth.uid
+      );
+      allow list, delete: if ownsExistingDocument();
+      allow create: if ownsNewDocument();
+      allow update: if ownsUpdatedDocument();
+    }
+
+    // App preferences and month-closure records.
+    match /app_meta/{docId} {
+      allow get: if signedIn() && (
+        !exists(/databases/$(database)/documents/app_meta/$(docId))
+        || resource.data.ownerUid == request.auth.uid
+      );
+      allow list, delete: if ownsExistingDocument();
+      allow create: if ownsNewDocument();
+      allow update: if ownsUpdatedDocument();
+    }
   }
 }

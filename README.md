@@ -1,13 +1,14 @@
-# Aile Bütçe Takip — Firestore 403 düzeltmesi
+# Aile Bütçe Takip v12 — Ana sayfa sadeleştirme
 
-Bu paket, olmayan `app_meta` belgelerine doğrudan GET atıldığında Firestore REST'in döndürebildiği 403 hatasını gidermek için `get_document` fonksiyonuna güvenli kullanıcı kapsamlı sorgu geri dönüşü ekler.
+## Değişiklikler
+- Ekstre İçe Aktar, Kartlar ve Ekstreler, Ay Karşılaştırma sayfaları ana sayfadaki modül kartlarından ve geçerli sayfa listesinden çıkarıldı.
+- Ayı kapat / yeniden aç kontrolü Genel Bakış ana sayfasına taşındı.
+- Kategori özeti ayrı ekstre ekranından kaldırıldı; Harcama Analizi modülü korunuyor.
+- Mevcut Firestore kayıtları silinmez; geçmiş işlemler Harcama Analizi ve Veri Yönetimi üzerinden kullanılabilir.
 
 ## Kurulum
-1. GitHub deposunda `app.py` dosyasını bu pakettekiyle değiştirin.
-2. Firebase Console → Firestore Database → Rules bölümünü açın.
-3. Bu paketteki `firestore.rules` içeriğinin tamamını Rules editörüne yapıştırıp **Publish** edin.
-4. Streamlit Cloud dağıtımı tamamlandıktan sonra uygulamayı yenileyin.
+1. GitHub deposundaki `app.py` dosyasını bu dosyayla değiştirin ve commit edin.
+2. Firebase kurallarınız zaten v11 sürümündeki güvenli `ownerUid` kurallarıysa tekrar değiştirmek gerekmez. Değilse `firestore.rules` dosyasını Firebase Console → Firestore Database → Rules bölümünde yayımlayın.
+3. Streamlit dağıtımı tamamlandıktan sonra sayfayı yenileyin.
 
-Kurallar veritabanını herkese açmaz: oturum açan kullanıcı yalnızca `ownerUid` değeri kendi UID'si olan kayıtları okuyup yazabilir. Eksik bir belgeye GET isteğinin 404 döndürebilmesi için yalnızca oturum açmış kullanıcılara mevcut olmayan belge yollarında get izni verilir; mevcut kayıtlar yine ownerUid ile korunur.
-
-Python sözdizimi kontrol edildi; canlı Firebase hesabında test edilmedi.
+Python sözdizimi kontrol edildi; canlı Firebase ortamında uçtan uca test edilmedi.

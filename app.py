@@ -343,6 +343,24 @@ def login(email, password, remember_device=False):
             pass
 
 
+def login_from_secrets():
+    """Sign in silently using credentials stored in Streamlit Secrets; never show a password form."""
+    try:
+        auth_secrets = st.secrets.get("auth", {})
+        email = str(auth_secrets.get("email", "")).strip()
+        password = str(auth_secrets.get("password", ""))
+    except Exception:
+        return False
+    if not email or not password:
+        return False
+    try:
+        login(email, password, remember_device=False)
+        return True
+    except Exception as exc:
+        st.session_state["silent_login_error"] = str(exc)
+        return False
+
+
 def restore_auth_from_cookie():
     """Restore a trusted-device session without asking for the password again."""
     if st.session_state.get("auth"):
@@ -1169,26 +1187,19 @@ def ai_classify_dataframe(df):
 
 
 def login_view():
-    st.markdown("<div style='max-width:680px;margin:9vh auto 0 auto;'>", unsafe_allow_html=True)
-    st.markdown("<div class='app-hero'><div class='eyebrow'>AİLE FİNANS PANELİ</div><h1>💰 Aile Bütçe Takip</h1><p>Gelir, borç ve ekstrelerinize güvenli giriş yapın.</p></div>", unsafe_allow_html=True)
-    with st.form("login_form"):
-        email = st.text_input("E-posta", autocomplete="email")
-        password = st.text_input("Şifre", type="password", autocomplete="current-password")
-        remember_device = st.checkbox("Bu cihazda oturumu açık tut (1 yıl)", value=True)
-        submit = st.form_submit_button("Güvenli giriş", width="stretch", type="primary")
-    if submit:
-        if not API_KEY or not PROJECT_ID:
-            st.error("Firebase yapılandırması eksik. Streamlit Settings → Secrets bölümünü kontrol edin.")
-        elif not email.strip() or not password:
-            st.warning("E-posta ve şifre girin.")
-        else:
-            try:
-                login(email.strip(), password, remember_device=remember_device)
-                st.rerun()
-            except Exception as exc:
-                st.error(f"Giriş başarısız: {exc}")
-    st.caption("Hesap oluşturma uygulama içinden kapalıdır; kullanıcıları Firebase Authentication konsolundan yönetebilirsiniz.")
-    st.markdown("</div>", unsafe_allow_html=True)
+    """No interactive login screen: attempt silent Firebase sign-in from Streamlit Secrets."""
+    if not API_KEY or not PROJECT_ID:
+        st.error("Firebase yapılandırması eksik. Streamlit Secrets alanını kontrol edin.")
+        st.stop()
+    if login_from_secrets():
+        st.rerun()
+    st.markdown("<div class='app-hero'><div class='eyebrow'>AİLE FİNANS PANELİ</div><h1>💰 Aile Bütçe Takip</h1><p>Otomatik oturum açılıyor.</p></div>", unsafe_allow_html=True)
+    err = st.session_state.get("silent_login_error")
+    if err:
+        st.error(f"Otomatik giriş başarısız: {err}")
+    st.warning("Giriş ekranı kaldırıldı. Otomatik giriş için Streamlit → App settings → Secrets bölümünde [auth] altında email ve password bir kez tanımlanmalı. Firebase şifresi uygulama koduna yazılmaz.")
+    st.code('[auth]\\nemail = "Firebase hesabının e-postası"\\npassword = "Firebase hesabının şifresi"', language="toml")
+
 
 # ---------- App boot ----------
 if not API_KEY or not PROJECT_ID:
@@ -1201,6 +1212,8 @@ if not current_auth():
     restore_auth_from_cookie()
 
 if not current_auth():
+    if login_from_secrets():
+        st.rerun()
     login_view()
     st.stop()
 
