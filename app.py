@@ -343,24 +343,6 @@ def login(email, password, remember_device=False):
             pass
 
 
-def login_from_secrets():
-    """Sign in silently using credentials stored in Streamlit Secrets; never show a password form."""
-    try:
-        auth_secrets = st.secrets.get("auth", {})
-        email = str(auth_secrets.get("email", "")).strip()
-        password = str(auth_secrets.get("password", ""))
-    except Exception:
-        return False
-    if not email or not password:
-        return False
-    try:
-        login(email, password, remember_device=False)
-        return True
-    except Exception as exc:
-        st.session_state["silent_login_error"] = str(exc)
-        return False
-
-
 def restore_auth_from_cookie():
     """Restore a trusted-device session without asking for the password again."""
     if st.session_state.get("auth"):
@@ -426,8 +408,9 @@ def logout():
 
 def get_id_token():
     auth = current_auth()
-    if not auth:
-        raise RuntimeError("Oturum açılmamış.")
+    # Public mode: no Firebase Authentication token is used.
+    if not auth or auth.get("public_mode"):
+        return None
     if time.time() < auth["expires_at"]:
         return auth["id_token"]
     response = requests.post(
@@ -460,7 +443,11 @@ def get_id_token():
 
 def fs_request(method, url, **kwargs):
     headers = kwargs.pop("headers", {})
-    headers["Authorization"] = f"Bearer {get_id_token()}"
+    token = get_id_token()
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    else:
+        headers.pop("Authorization", None)
     headers["Content-Type"] = "application/json"
     response = requests.request(method, url, headers=headers, timeout=30, **kwargs)
     if response.status_code == 401:
@@ -481,7 +468,8 @@ def get_document(collection, doc_id):
     if collection not in COLLECTIONS:
         raise ValueError("İzin verilmeyen koleksiyon.")
     url = f"{FS_ROOT}/{collection}/{doc_id}"
-    headers = {"Authorization": f"Bearer {get_id_token()}"}
+    token = get_id_token()
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
     response = requests.get(url, headers=headers, timeout=20)
 
     # With Firestore REST + ownerUid-scoped rules, GET on a document that does
@@ -666,14 +654,11 @@ def render_category_summary(source_df, heading, empty_message):
 
 
 def list_documents(collection, uid, limit=1000):
-    """Query only by ownerUid. All other filtering/sorting is client-side to avoid composite-index crashes."""
+    """Public mode: query collection without owner filtering; Firestore rules must allow public read/write."""
     if collection not in COLLECTIONS:
         raise ValueError("İzin verilmeyen koleksiyon.")
     query = {
         "from": [{"collectionId": collection}],
-        "where": {"fieldFilter": {
-            "field": {"fieldPath": "ownerUid"}, "op": "EQUAL", "value": to_fs_value(uid)
-        }},
         "limit": limit,
     }
     response = fs_request("POST", f"{FS_ROOT}:runQuery", json={"structuredQuery": query})
@@ -1186,39 +1171,23 @@ def ai_classify_dataframe(df):
     return result
 
 
-def login_view():
-    """No interactive login screen: attempt silent Firebase sign-in from Streamlit Secrets."""
-    if not API_KEY or not PROJECT_ID:
-        st.error("Firebase yapılandırması eksik. Streamlit Secrets alanını kontrol edin.")
-        st.stop()
-    if login_from_secrets():
-        st.rerun()
-    st.markdown("<div class='app-hero'><div class='eyebrow'>AİLE FİNANS PANELİ</div><h1>💰 Aile Bütçe Takip</h1><p>Otomatik oturum açılıyor.</p></div>", unsafe_allow_html=True)
-    err = st.session_state.get("silent_login_error")
-    if err:
-        st.error(f"Otomatik giriş başarısız: {err}")
-    st.warning("Giriş ekranı kaldırıldı. Otomatik giriş için Streamlit → App settings → Secrets bölümünde [auth] altında email ve password bir kez tanımlanmalı. Firebase şifresi uygulama koduna yazılmaz.")
-    st.code('[auth]\\nemail = "Firebase hesabının e-postası"\\npassword = "Firebase hesabının şifresi"', language="toml")
-
-
-# ---------- App boot ----------
+# ---------- App boot: public mode, no login/password ----------
 if not API_KEY or not PROJECT_ID:
     st.title("💠 Aile Bütçe Merkezi")
-    st.error("Firebase ayarları eksik. Streamlit Cloud → App settings → Secrets alanına Firebase proje ID'sini ve Web API anahtarını ekleyin.")
-    st.code('[firebase]\nproject_id = "aile-butce-takip-14da8"\napi_key = "FIREBASE_WEB_APP_API_KEY"', language="toml")
+    st.error("Firebase ayarları eksik. Streamlit Cloud → App settings → Secrets alanındaki [firebase] bölümünü kontrol edin.")
+    st.code('[firebase]\\nproject_id = "aile-butce-takip-14da8"\\napi_key = "FIREBASE_WEB_APP_API_KEY"', language="toml")
     st.stop()
 
-if not current_auth():
-    restore_auth_from_cookie()
-
-if not current_auth():
-    if login_from_secrets():
-        st.rerun()
-    login_view()
-    st.stop()
-
+# Shared fixed identifier keeps newly-created records grouped together in this public app.
+# Existing records are loaded without ownerUid filtering.
+uid = "public-family-budget"
+st.session_state["auth"] = {
+    "uid": uid,
+    "email": "Ortak erişim",
+    "public_mode": True,
+    "expires_at": float("inf"),
+}
 auth = current_auth()
-uid = auth["uid"]
 # Geçmişte sağlanan 6 Axess ekstresi ilk girişte otomatik yüklenir; kullanıcıdan yeniden dosya seçmesi istenmez.
 if not st.session_state.get("historical_seed_checked"):
     try:
