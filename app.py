@@ -728,7 +728,22 @@ def save_budget(uid, month_key, data):
             raise RuntimeError("Firebase yanıtındaki kart tutarları girilen tutarla eşleşmiyor.")
         print("[BUDGET_SAVE] returned document verified", flush=True)
     get_budget.clear()
-    print(f"[BUDGET_SAVE] cache cleared; target_doc={doc_id}", flush=True)
+    print(f"[BUDGET_SAVE] cache cleared; verifying persisted document id={doc_id}", flush=True)
+    # Independently re-read the collection used by get_budget to confirm that the
+    # selected deterministic document—not an older duplicate—contains the new values.
+    rows_after_save = list_documents("monthly_budgets", uid, limit=1000)
+    verified_doc = next((row for row in rows_after_save if str(row.get("id", "")) == doc_id), None)
+    if not verified_doc:
+        raise RuntimeError(
+            "Firebase PATCH yanıtı başarılıydı ancak kayıt sonrasında bütçe listesinde "
+            f"belge bulunamadı (ay: {month_key}, belge: {doc_id})."
+        )
+    if verified_doc.get("expenses", {}) != payload.get("expenses", {}):
+        raise RuntimeError(
+            "Firebase kaydı yanıt verdi ancak yeniden okunan kart tutarları farklı. "
+            f"Ay: {month_key}, belge: {doc_id}."
+        )
+    print("[BUDGET_SAVE] read-after-write verification passed", flush=True)
 
 
 @st.cache_data(ttl=45, show_spinner=False)
