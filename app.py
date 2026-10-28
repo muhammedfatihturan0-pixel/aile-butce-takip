@@ -218,9 +218,12 @@ FS_ROOT = f"https://firestore.googleapis.com/v1/projects/{PROJECT_ID}/databases/
 
 def money(value):
     try:
-        return f"{float(value):,.2f} TL".replace(",", "X").replace(".", ",").replace("X", ".")
+        amount = float(value)
+        # Whole-lira amounts stay compact (54.000 TL); preserve kuruş when present.
+        formatted = f"{amount:,.0f}" if amount.is_integer() else f"{amount:,.2f}"
+        return f"{formatted} TL".replace(",", "X").replace(".", ",").replace("X", ".")
     except (ValueError, TypeError):
-        return "0,00 TL"
+        return "0 TL"
 
 
 AYLAR_TR = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"]
@@ -679,14 +682,25 @@ def budget_id(uid, month_key):
 
 @st.cache_data(ttl=45, show_spinner=False)
 def get_budget(uid, month_key):
-    # Query by ownerUid only and filter month locally. This avoids index errors and
-    # avoids a direct GET of a not-yet-created budget document.
+    # Always prefer the deterministic document ID used by save_budget.
+    # Older duplicate budget documents can exist for the same month; picking the
+    # first matching month could make a successful write appear to have vanished.
     rows = list_documents("monthly_budgets", uid, limit=1000)
-    return next((row for row in rows if row.get("month") == month_key), None)
+    target_id = budget_id(uid, month_key)
+    exact = next((row for row in rows if str(row.get("id", "")) == target_id), None)
+    if exact:
+        return exact
+    month_rows = [row for row in rows if row.get("month") == month_key]
+    if len(month_rows) > 1:
+        print(
+            f"[BUDGET_LOAD] duplicate month documents month={month_key} "
+            f"ids={[str(row.get('id', '')) for row in month_rows]}",
+            flush=True,
+        )
+    return month_rows[0] if month_rows else None
 
 
 def save_budget(uid, month_key, data):
-    # Checkpoints are visible in Streamlit Cloud logs to pinpoint slow/failed saves.
     print(f"[BUDGET_SAVE] start month={month_key}", flush=True)
     closure = get_month_closure(uid, month_key)
     print(f"[BUDGET_SAVE] month-close check complete closed={bool(closure.get('closed'))}", flush=True)
@@ -702,10 +716,19 @@ def save_budget(uid, month_key, data):
         payload["debtMeta"] = data["debtMeta"]
     doc_id = budget_id(uid, month_key)
     print(f"[BUDGET_SAVE] Firestore PATCH start collection=monthly_budgets doc={doc_id}", flush=True)
-    write_document("monthly_budgets", doc_id, payload)
-    print("[BUDGET_SAVE] Firestore PATCH complete", flush=True)
+    saved_document = write_document("monthly_budgets", doc_id, payload)
+    print("[BUDGET_SAVE] Firestore PATCH complete; checking returned document", flush=True)
+    # A successful Firestore PATCH returns the saved document. Compare it with the
+    # submitted budget so the UI won't report success if the write did not persist.
+    if isinstance(saved_document, dict) and saved_document.get("fields"):
+        persisted = from_fs_fields(saved_document.get("fields", {}))
+        if persisted.get("month") != month_key:
+            raise RuntimeError("Firebase kaydı doğrulanamadı: ay bilgisi eşleşmiyor.")
+        if persisted.get("expenses") != payload.get("expenses", {}):
+            raise RuntimeError("Firebase yanıtındaki kart tutarları girilen tutarla eşleşmiyor.")
+        print("[BUDGET_SAVE] returned document verified", flush=True)
     get_budget.clear()
-    print("[BUDGET_SAVE] cache cleared; done", flush=True)
+    print(f"[BUDGET_SAVE] cache cleared; target_doc={doc_id}", flush=True)
 
 
 @st.cache_data(ttl=45, show_spinner=False)
@@ -1320,7 +1343,11 @@ if page == PAGE_HOME:
     selected_card_for_prefill = st.session_state.get(preference_key, quick_card_options[0])
     quick_amount_context = f"{selected_month}|{selected_card_for_prefill}"
     if st.session_state.get("_quick_card_amount_context") != quick_amount_context:
-        st.session_state["quick_card_total_amount"] = float(expenses.get(selected_card_for_prefill, 0) or 0)
+        current_card_amount = float(expenses.get(selected_card_for_prefill, 0) or 0)
+        if current_card_amount.is_integer():
+            st.session_state["quick_card_total_amount_text"] = str(int(current_card_amount))
+        else:
+            st.session_state["quick_card_total_amount_text"] = f"{current_card_amount:.2f}".rstrip("0").rstrip(".")
         st.session_state["_quick_card_amount_context"] = quick_amount_context
 
     quick_mode = st.radio(
@@ -1342,29 +1369,59 @@ if page == PAGE_HOME:
                 on_change=persist_quick_card_preference,
             )
         with quick_b:
-            quick_amount = st.number_input(
-                "Güncel kart toplamı (TL)", min_value=0.0, step=100.0,
-                format="%.2f", key="quick_card_total_amount",
+            # A text field avoids number_input's separate "Enter to apply" step and forced .00.
+            quick_amount_text = st.text_input(
+                "Güncel kart borcu (TL)", key="quick_card_total_amount_text",
+                placeholder="Örn. 54000",
             )
         st.caption(f"Seçili ay: {month_label}. Bu işlem yalnızca **{quick_card}** kaleminin aylık tutarını değiştirir. Mevcut tutar: {money(expenses.get(quick_card, 0))}. Harcama/ekstre işlem satırı eklenmez.")
-        if st.button("💾 Kart toplamını güncelle", type="primary", width="stretch", key="quick_update_card_total", disabled=month_closed):
+        if st.button("💾 Kart borcunu güncelle", type="primary", width="stretch", key="quick_update_card_total", disabled=month_closed):
             try:
+                raw_amount = str(quick_amount_text or "").strip().replace("₺", "").replace("TL", "").replace("tl", "").replace(" ", "")
+                if not raw_amount:
+                    raise ValueError("Lütfen kart borcu tutarını girin.")
+                if "," in raw_amount and "." in raw_amount:
+                    # Turkish: 54.000,50; English: 54,000.50
+                    if raw_amount.rfind(",") > raw_amount.rfind("."):
+                        raw_amount = raw_amount.replace(".", "").replace(",", ".")
+                    else:
+                        raw_amount = raw_amount.replace(",", "")
+                elif "," in raw_amount:
+                    if re.fullmatch(r"\d{1,3}(,\d{3})+", raw_amount):
+                        raw_amount = raw_amount.replace(",", "")
+                    elif re.fullmatch(r"\d+,\d{1,2}", raw_amount):
+                        raw_amount = raw_amount.replace(",", ".")
+                    else:
+                        raise ValueError("Tutarı 54000, 54.000 veya 54.000,50 biçiminde girin.")
+                elif "." in raw_amount:
+                    if re.fullmatch(r"\d{1,3}(\.\d{3})+", raw_amount):
+                        raw_amount = raw_amount.replace(".", "")
+                    elif re.fullmatch(r"\d+\.\d{1,2}", raw_amount):
+                        pass
+                    else:
+                        raise ValueError("Tutarı 54000, 54.000 veya 54.000,50 biçiminde girin.")
+                quick_amount = float(raw_amount)
+                if quick_amount < 0:
+                    raise ValueError("Kart borcu negatif olamaz.")
                 updated_expenses = dict(expenses)
-                updated_expenses[quick_card] = float(quick_amount)
-                with st.status("Kart tutarı kaydediliyor…", expanded=True) as save_status:
-                    save_status.write("Ayın kapanış durumu kontrol ediliyor; ardından Firebase kaydı yapılacak.")
+                updated_expenses[quick_card] = quick_amount
+                with st.status("Kart borcu kaydediliyor…", expanded=True) as save_status:
+                    save_status.write("Ayın kapanış durumu kontrol ediliyor.")
                     save_budget(uid, selected_month, {
                         "income": income,
                         "expenses": updated_expenses,
                         "notes": budget.get("notes", ""),
                         "debtMeta": budget.get("debtMeta", {}) or {},
                     })
-                    save_status.update(label="Kart tutarı Firebase'e kaydedildi.", state="complete", expanded=False)
-                st.success(f"{quick_card} tutarı {month_label} için {money(quick_amount)} olarak güncellendi.")
+                    save_status.update(label="Kart borcu Firebase'e kaydedildi.", state="complete", expanded=False)
+                display_amount = f"{quick_amount:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                if display_amount.endswith(",00"):
+                    display_amount = display_amount[:-3]
+                st.success(f"{quick_card} borcu {month_label} için {display_amount} TL olarak güncellendi.")
                 st.rerun()
             except Exception as exc:
                 print(f"[BUDGET_SAVE] failed: {type(exc).__name__}: {exc}", flush=True)
-                st.error(f"Kart toplamı güncellenemedi ({type(exc).__name__}): {exc}")
+                st.error(f"Kart borcu kaydedilemedi ({type(exc).__name__}): {exc}")
     else:
         st.caption("Bu alan yalnızca kart ayrımı olmayan genel toplam kaydı ekler. Ayrıntılı ekstrede aynı tutar varsa iki kez sayılmaması için yalnızca bir yöntemi kullan.")
         quick_general_amount = st.number_input(
