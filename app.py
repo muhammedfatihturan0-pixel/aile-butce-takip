@@ -686,18 +686,26 @@ def get_budget(uid, month_key):
 
 
 def save_budget(uid, month_key, data):
-    if get_month_closure(uid, month_key).get("closed"):
+    # Checkpoints are visible in Streamlit Cloud logs to pinpoint slow/failed saves.
+    print(f"[BUDGET_SAVE] start month={month_key}", flush=True)
+    closure = get_month_closure(uid, month_key)
+    print(f"[BUDGET_SAVE] month-close check complete closed={bool(closure.get('closed'))}", flush=True)
+    if closure.get("closed"):
         raise RuntimeError(f"{month_label_tr(month_key)} ayı kapalı. Değişiklik için önce Ekstre İçe Aktar bölümünden ayı yeniden aç.")
     payload = {
         "ownerUid": uid, "month": month_key, "income": data.get("income", {}),
         "expenses": data.get("expenses", {}), "notes": data.get("notes", ""),
-        "updatedAt": datetime.utcnow().isoformat(timespec="seconds"),
+        "updatedAt": datetime.now(ZoneInfo("Europe/Istanbul")).isoformat(timespec="seconds"),
     }
     # Preserve optional debt metadata unless the debt module explicitly updates it.
     if "debtMeta" in data:
         payload["debtMeta"] = data["debtMeta"]
-    write_document("monthly_budgets", budget_id(uid, month_key), payload)
+    doc_id = budget_id(uid, month_key)
+    print(f"[BUDGET_SAVE] Firestore PATCH start collection=monthly_budgets doc={doc_id}", flush=True)
+    write_document("monthly_budgets", doc_id, payload)
+    print("[BUDGET_SAVE] Firestore PATCH complete", flush=True)
     get_budget.clear()
+    print("[BUDGET_SAVE] cache cleared; done", flush=True)
 
 
 @st.cache_data(ttl=45, show_spinner=False)
@@ -1343,16 +1351,20 @@ if page == PAGE_HOME:
             try:
                 updated_expenses = dict(expenses)
                 updated_expenses[quick_card] = float(quick_amount)
-                save_budget(uid, selected_month, {
-                    "income": income,
-                    "expenses": updated_expenses,
-                    "notes": budget.get("notes", ""),
-                    "debtMeta": budget.get("debtMeta", {}) or {},
-                })
+                with st.status("Kart tutarı kaydediliyor…", expanded=True) as save_status:
+                    save_status.write("Ayın kapanış durumu kontrol ediliyor; ardından Firebase kaydı yapılacak.")
+                    save_budget(uid, selected_month, {
+                        "income": income,
+                        "expenses": updated_expenses,
+                        "notes": budget.get("notes", ""),
+                        "debtMeta": budget.get("debtMeta", {}) or {},
+                    })
+                    save_status.update(label="Kart tutarı Firebase'e kaydedildi.", state="complete", expanded=False)
                 st.success(f"{quick_card} tutarı {month_label} için {money(quick_amount)} olarak güncellendi.")
                 st.rerun()
             except Exception as exc:
-                st.error(f"Kart toplamı güncellenemedi: {exc}")
+                print(f"[BUDGET_SAVE] failed: {type(exc).__name__}: {exc}", flush=True)
+                st.error(f"Kart toplamı güncellenemedi ({type(exc).__name__}): {exc}")
     else:
         st.caption("Bu alan yalnızca kart ayrımı olmayan genel toplam kaydı ekler. Ayrıntılı ekstrede aynı tutar varsa iki kez sayılmaması için yalnızca bir yöntemi kullan.")
         quick_general_amount = st.number_input(
