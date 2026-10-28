@@ -562,6 +562,35 @@ def set_month_closure(uid, month_key, closed, rows=None):
     load_transactions.clear()
 
 
+def get_active_month_preference(uid, default_month, valid_months):
+    """Load the month the household last selected, so a browser refresh won't reset to today's month."""
+    doc_id = f"{uid}_active_month_preference"
+    try:
+        saved = get_document("app_meta", doc_id) or {}
+        month_key = str(saved.get("month", default_month))
+    except Exception as exc:
+        print(f"[MONTH_PREF] read failed: {type(exc).__name__}: {exc}", flush=True)
+        month_key = default_month
+    return month_key if month_key in valid_months else default_month
+
+
+def set_active_month_preference(uid, month_key):
+    """Persist the active month in Firestore so it survives a full page refresh."""
+    doc_id = f"{uid}_active_month_preference"
+    existing = get_document("app_meta", doc_id)
+    payload = {
+        "ownerUid": uid,
+        "key": "active_month_preference",
+        "month": month_key,
+        "updatedAt": datetime.now(ZoneInfo("Europe/Istanbul")).isoformat(timespec="seconds"),
+    }
+    if existing:
+        write_document("app_meta", doc_id, payload)
+    else:
+        create_document("app_meta", payload, doc_id=doc_id)
+    print(f"[MONTH_PREF] saved month={month_key}", flush=True)
+
+
 def render_category_summary(source_df, heading, empty_message):
     """Show category/merchant totals in always-visible labels and tables; no hover/click needed."""
     section("🧾", heading, "Tutarlar grafikte ve tabloda doğrudan görünür; üzerine gelmek gerekmez.")
@@ -1264,8 +1293,30 @@ with st.sidebar:
     if st.button("🏠 Ana sayfa", width="stretch", type="primary" if st.session_state["app_page"] == PAGE_HOME else "secondary"):
         st.session_state["app_page"] = PAGE_HOME
         st.rerun()
-    selected_month = st.selectbox("Aktif dönem", month_options, index=month_options.index(current_month) if current_month in month_options else 9,
-                                  format_func=lambda x: month_label_tr(x))
+    # Restore the last active month from Firestore before creating the widget.
+    # This survives browser refreshes/new Streamlit sessions (session_state alone does not).
+    preferred_month = get_active_month_preference(uid, current_month, month_options)
+    st.session_state["active_month_preference"] = preferred_month
+
+    def persist_active_month_preference():
+        chosen_month = st.session_state.get("active_month_preference", current_month)
+        try:
+            set_active_month_preference(uid, chosen_month)
+            st.session_state.pop("active_month_preference_error", None)
+        except Exception as pref_exc:
+            st.session_state["active_month_preference_error"] = str(pref_exc)
+            print(f"[MONTH_PREF] save failed: {type(pref_exc).__name__}: {pref_exc}", flush=True)
+
+    selected_month = st.selectbox(
+        "Aktif dönem", month_options,
+        index=month_options.index(preferred_month),
+        format_func=lambda x: month_label_tr(x),
+        key="active_month_preference",
+        on_change=persist_active_month_preference,
+    )
+    if st.session_state.get("active_month_preference_error"):
+        st.caption("Aktif ay tercihi kaydedilemedi; teknik ayrıntı:")
+        st.code(st.session_state["active_month_preference_error"])
     st.caption("Modüller ana sayfadaki kartlardan açılır.")
     st.divider()
     if st.button("↪ Güvenli çıkış", width="stretch"):
@@ -1509,7 +1560,13 @@ if page == PAGE_HOME:
         ):
             try:
                 set_month_closure(uid, selected_month, True, tx_rows)
-                st.success(f"{month_label} kapatıldı. Bu dönem artık kilitli.")
+                # After closing a month, advance the active period to the next month.
+                year, month = map(int, selected_month.split("-"))
+                next_year, next_month = add_months(year, month, 1)
+                next_month_key = f"{next_year}-{next_month:02d}"
+                if next_month_key in month_options:
+                    set_active_month_preference(uid, next_month_key)
+                st.success(f"{month_label} kapatıldı. Aktif dönem sonraki aya alındı.")
                 st.rerun()
             except Exception as exc:
                 st.error(f"Ay kapatılamadı: {exc}")
@@ -1658,7 +1715,13 @@ elif page == "📥 Ekstre İçe Aktar":
         if st.button("🔒 Ayı kapat", key=f"close_month_{selected_month}", type="primary", width="stretch", disabled=not confirm_month_close):
             try:
                 set_month_closure(uid, selected_month, True, tx_rows)
-                st.success(f"{month_label} kapatıldı. Bu dönem artık kilitli.")
+                # After closing a month, advance the active period to the next month.
+                year, month = map(int, selected_month.split("-"))
+                next_year, next_month = add_months(year, month, 1)
+                next_month_key = f"{next_year}-{next_month:02d}"
+                if next_month_key in month_options:
+                    set_active_month_preference(uid, next_month_key)
+                st.success(f"{month_label} kapatıldı. Aktif dönem sonraki aya alındı.")
                 st.rerun()
             except Exception as exc:
                 st.error(f"Ay kapatılamadı: {exc}")
