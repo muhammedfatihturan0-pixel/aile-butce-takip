@@ -563,11 +563,23 @@ def set_month_closure(uid, month_key, closed, rows=None):
 
 
 def get_active_month_preference(uid, default_month, valid_months):
-    """Load the month the household last selected, so a browser refresh won't reset to today's month."""
+    """Load the last selected month, or advance if today's month was already closed before this preference existed."""
     doc_id = f"{uid}_active_month_preference"
     try:
         saved = get_document("app_meta", doc_id) or {}
-        month_key = str(saved.get("month", default_month))
+        stored_month = str(saved.get("month", "")).strip()
+        if stored_month:
+            month_key = stored_month
+        else:
+            month_key = default_month
+            # Migration path for users who closed the current month before active-month
+            # persistence was deployed: start them in the following month automatically.
+            if get_month_closure(uid, default_month).get("closed"):
+                year, month = map(int, default_month.split("-"))
+                next_year, next_month = add_months(year, month, 1)
+                next_key = f"{next_year}-{next_month:02d}"
+                if next_key in valid_months:
+                    month_key = next_key
     except Exception as exc:
         print(f"[MONTH_PREF] read failed: {type(exc).__name__}: {exc}", flush=True)
         month_key = default_month
