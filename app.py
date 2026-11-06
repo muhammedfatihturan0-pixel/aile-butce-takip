@@ -643,6 +643,7 @@ def save_budget(uid, month_key, data):
     payload = {
         "ownerUid": uid, "month": month_key, "income": data.get("income", {}),
         "expenses": data.get("expenses", {}), "notes": data.get("notes", ""),
+        "removedExpenses": sorted(set(str(x) for x in data.get("removedExpenses", []) if str(x).strip())),
         "updatedAt": datetime.now(ZoneInfo("Europe/Istanbul")).isoformat(timespec="seconds"),
     }
     # Preserve optional debt metadata unless the debt module explicitly updates it.
@@ -1179,10 +1180,10 @@ if not st.session_state.get("historical_seed_checked"):
         # The app can still show the underlying Firebase error below; don't hide it.
         st.session_state["historical_seed_error"] = str(seed_exc)
 now = today_tr()
-# Historical periods begin in January 2020. For 2026, show only October onward.
-month_options = [f"{year}-{month:02d}" for year in range(2020, 2030) for month in range(1, 13)
+# Periods begin in October 2026 and run through December 2030.
+month_options = [f"{year}-{month:02d}" for year in range(2026, 2031) for month in range(1, 13)
                  if year != 2026 or month >= 10]
-year_options = list(range(2020, 2030))
+year_options = list(range(2026, 2031))
 months_by_year = {year: [month for month in range(1, 13)
                          if f"{year}-{month:02d}" in month_options] for year in year_options}
 current_month = now.strftime("%Y-%m")
@@ -1195,7 +1196,7 @@ PAGE_CARDS = "💳 Kartlar ve Ekstreler"
 PAGE_ANALYSIS = "🔎 Harcama Analizi"
 PAGE_COMPARE = "📊 Ay Karşılaştırma"
 PAGE_DATA = "⚙️ Veri Yönetimi"
-VALID_PAGES = {PAGE_HOME, PAGE_BUDGET, PAGE_ANALYSIS, PAGE_DATA}
+VALID_PAGES = {PAGE_HOME, PAGE_BUDGET}
 if st.session_state.get("app_page") not in VALID_PAGES:
     st.session_state["app_page"] = PAGE_HOME
 with st.sidebar:
@@ -1203,7 +1204,7 @@ with st.sidebar:
     st.markdown(f'<span class="pill">● Ortak bütçe paneli</span><div class="small-muted" style="margin-top:8px">{auth.get("email", "Giriş yapıldı")}</div>', unsafe_allow_html=True)
     st.divider()
     st.caption("MENÜ")
-    for nav_page in (PAGE_HOME, PAGE_BUDGET, PAGE_ANALYSIS, PAGE_DATA):
+    for nav_page in (PAGE_HOME, PAGE_BUDGET):
         if st.button(nav_page, key=f"nav_{nav_page}", width="stretch",
                      type="primary" if st.session_state["app_page"] == nav_page else "secondary"):
             st.session_state["app_page"] = nav_page
@@ -1241,7 +1242,7 @@ with st.sidebar:
                                          on_change=persist_active_month_preference,
                                          label_visibility="collapsed")
     selected_month = f"{selected_year}-{selected_month_number:02d}"
-    st.caption("Ocak 2020 – Aralık 2029 · 2026: Ekim–Aralık")
+    st.caption("Ekim 2026 – Aralık 2030 · 2026: Ekim–Aralık")
     if st.session_state.get("active_month_preference_error"):
         st.caption("Dönem tercihi kaydedilemedi:")
         st.code(st.session_state["active_month_preference_error"])
@@ -1252,6 +1253,11 @@ page = st.session_state["app_page"]
 
 try:
     budget = get_budget(uid, selected_month) or default_budget(selected_month)
+    removed_expenses = set(str(x) for x in (budget.get("removedExpenses", []) or []))
+    budget["expenses"] = {
+        str(name): amount for name, amount in (budget.get("expenses", {}) or {}).items()
+        if str(name) not in removed_expenses
+    }
     tx_rows = load_transactions(uid, selected_month)
     month_closure = get_month_closure(uid, selected_month)
     month_closed = bool(month_closure.get("closed"))
@@ -1404,6 +1410,7 @@ if page == PAGE_HOME:
                         "income": income,
                         "expenses": updated_expenses,
                         "notes": budget.get("notes", ""),
+                        "removedExpenses": sorted(removed_expenses - {quick_card}),
                         "debtMeta": budget.get("debtMeta", {}) or {},
                     })
                     save_status.update(label="Kart borcu Firebase'e kaydedildi.", state="complete", expanded=False)
@@ -1579,42 +1586,60 @@ elif page == PAGE_BUDGET:
     if submitted:
         if add_income_name.strip():
             new_income[add_income_name.strip()] = add_income_value
+        removed_expense_names = set(removed_expenses)
         if add_expense_name.strip():
             if add_expense_name.strip() in new_expenses:
                 st.warning("Bu isimde bir kalem var; mevcut kalemi güncelle.")
             else:
                 new_expenses[add_expense_name.strip()] = add_expense_value
+                removed_expense_names.discard(add_expense_name.strip())
         try:
-            # Eski debtMeta verisi korunur, artık ödeme durumu/sorumlu sorulmaz.
+            # Keep explicit removals so default values cannot reappear on the next rerun.
             save_budget(uid, selected_month, {"income": new_income, "expenses": new_expenses, "notes": notes,
+                                              "removedExpenses": sorted(removed_expense_names),
                                               "debtMeta": budget.get("debtMeta", {}) or {}})
             st.success(f"{month_label} bütçesi kaydedildi.")
             st.rerun()
         except Exception as exc:
             st.error(f"Kaydedilemedi: {exc}")
     if expenses:
-        with st.expander("🗑️ Borç / gider kalemi sil", expanded=False):
-            st.caption("Seçtiğin kalem bu ayın bütçesinden tamamen kaldırılır. Diğer ayların kayıtları etkilenmez.")
-            delete_expense_names = st.multiselect(
-                "Silinecek kalemler", options=list(expenses.keys()),
-                key=f"delete_expenses_{selected_month}",
-                placeholder="Kaldırmak istediğin kredi veya gideri seç",
+        st.divider()
+        section("🗑️", "Borç / gider kalemi kaldır", "Seçtiğin kalem yalnızca bu ayın bütçesinden tamamen silinir.")
+        remove_col, remove_action_col = st.columns([2.2, 1], vertical_alignment="bottom")
+        with remove_col:
+            delete_expense_name = st.selectbox(
+                "Kaldırılacak kalem", options=sorted(expenses.keys()),
+                key=f"delete_expense_{selected_month}",
             )
-            if st.button("Seçili kalemleri sil", type="secondary",
-                         key=f"delete_expenses_button_{selected_month}",
-                         disabled=(not delete_expense_names or month_closed)):
-                remaining_expenses = {name: amount for name, amount in expenses.items()
-                                      if name not in set(delete_expense_names)}
-                try:
-                    save_budget(uid, selected_month, {
-                        "income": income, "expenses": remaining_expenses,
-                        "notes": budget.get("notes", ""),
-                        "debtMeta": budget.get("debtMeta", {}) or {},
-                    })
-                    st.success("Seçili kalemler bu ayın bütçesinden kaldırıldı.")
-                    st.rerun()
-                except Exception as exc:
-                    st.error(f"Kalemler silinemedi: {exc}")
+        with remove_action_col:
+            remove_clicked = st.button(
+                "Kalemi sil", type="secondary", width="stretch",
+                key=f"delete_expense_button_{selected_month}",
+                disabled=month_closed,
+            )
+        if remove_clicked:
+            remaining_expenses = {name: amount for name, amount in expenses.items()
+                                  if name != delete_expense_name}
+            removed_expense_names = sorted(removed_expenses | {delete_expense_name})
+            try:
+                save_budget(uid, selected_month, {
+                    "income": income, "expenses": remaining_expenses,
+                    "notes": budget.get("notes", ""),
+                    "removedExpenses": removed_expense_names,
+                    "debtMeta": budget.get("debtMeta", {}) or {},
+                })
+                # Verify the just-saved state before reporting success.
+                get_budget.clear()
+                saved_check = get_budget(uid, selected_month) or {}
+                saved_expenses = saved_check.get("expenses", {}) or {}
+                saved_removed = set(saved_check.get("removedExpenses", []) or [])
+                if delete_expense_name in saved_expenses or delete_expense_name not in saved_removed:
+                    raise RuntimeError("Kayıt doğrulamasında silinen kalem hâlâ bulundu. Lütfen tekrar deneyin.")
+                st.session_state.pop(f"exp_{selected_month}_{delete_expense_name}", None)
+                st.success(f"{delete_expense_name} bu ayın bütçesinden kaldırıldı.")
+                st.rerun()
+            except Exception as exc:
+                st.error(f"Kalem silinemedi: {exc}")
     ci1, ci2, ci3 = st.columns(3)
     ci1.metric("Toplam gelir", money(total_income))
     ci2.metric("Planlanan ödeme", money(total_expenses))
