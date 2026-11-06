@@ -1,6 +1,9 @@
 name: Keep Streamlit app awake
 
 on:
+  push:
+    paths:
+      - ".github/workflows/keep-alive.yml"
   schedule:
     # Run every 6 hours, away from the top of the hour.
     - cron: "17 */6 * * *"
