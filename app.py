@@ -23,170 +23,46 @@ _cookie_manager = stx.CookieManager(key="aile_butce_auth_cookie")
 # ---------- Modern dashboard styling ----------
 st.markdown(r"""
 <style>
-:root {
-  --bg: #0b1220;
-  --surface: #111b2b;
-  --surface-2: #162337;
-  --line: rgba(159,181,210,.15);
-  --text: #edf4ff;
-  --muted: #91a2bc;
-  --accent: #65e2c2;
-  --accent-2: #8aa8ff;
-}
-.block-container {padding-top:1.15rem; padding-bottom:2.4rem; max-width:1420px;}
-[data-testid="stAppViewContainer"] {background:radial-gradient(ellipse at 78% 0%, rgba(38,75,107,.18), transparent 34%), var(--bg);}
-[data-testid="stHeader"] {background:transparent;}
-[data-testid="stSidebar"] {background:#0e1726; border-right:1px solid var(--line);}
-[data-testid="stSidebar"] .block-container {padding-top:1.3rem;}
-[data-testid="stSidebar"] hr {margin:1.1rem 0; border-color:var(--line);}
-[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {color:#c2cee0;}
-[data-testid="stMetric"] {
-  background:linear-gradient(145deg,rgba(22,35,55,.96),rgba(16,27,43,.96));
-  border:1px solid var(--line); padding:16px 18px; border-radius:17px;
-  box-shadow:0 8px 24px rgba(0,0,0,.12); min-height:112px;
-}
-[data-testid="stMetricLabel"] {color:#d0dced !important; font-size:.86rem; font-weight:600;}
-[data-testid="stMetricValue"] {color:#ffffff !important; font-weight:760; letter-spacing:-.035em; font-size:clamp(1.25rem,2vw,1.8rem);}
-[data-testid="stMetricDelta"] {font-size:.8rem; color:#c9d7e9 !important;}
-[data-testid="stMarkdownContainer"], [data-testid="stMarkdownContainer"] p,
-[data-testid="stMarkdownContainer"] li, [data-testid="stCaptionContainer"] {
-  color:#e3ebf7;
-}
-[data-testid="stCaptionContainer"] {color:#b8c6d9 !important;}
-label, [data-testid="stWidgetLabel"] p, [data-testid="stWidgetLabel"] label,
-[data-testid="stRadio"] label, [data-testid="stCheckbox"] label {
-  color:#eaf1fb !important;
-}
-[data-testid="stTextInput"] input, [data-testid="stNumberInput"] input,
-[data-testid="stTextArea"] textarea, [data-testid="stDateInput"] input {
-  color:#ffffff !important; -webkit-text-fill-color:#ffffff !important;
-  background:#202c3e !important; caret-color:#65e2c2;
-}
-[data-testid="stSelectbox"] [data-baseweb="select"] > div,
-[data-testid="stMultiSelect"] [data-baseweb="select"] > div {
-  color:#ffffff !important; background:#202c3e !important;
-}
-[data-testid="stSelectbox"] [data-baseweb="select"] span,
-[data-testid="stMultiSelect"] [data-baseweb="select"] span {
-  color:#ffffff !important;
-}
-[data-baseweb="popover"], [data-baseweb="menu"], [role="listbox"] {
-  background:#172337 !important; color:#ffffff !important;
-}
-[role="option"], [role="option"] * {color:#f4f7fc !important;}
-[data-testid="stDataFrame"] {color:#f2f6fc;}
-[data-testid="stAlert"] {color:#f5f8ff !important;}
-[data-testid="stAlert"] p, [data-testid="stAlert"] div {color:inherit;}
-[data-testid="stExpander"] summary, [data-testid="stExpander"] summary p {
-  color:#edf4ff !important;
-}
-[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p,
-[data-testid="stSidebar"] label {color:#e1eaf7 !important;}
-.small-muted, .section-sub, .kpi-note {color:#b8c7dc !important;}
-.stButton>button, .stDownloadButton>button, [data-testid="stFormSubmitButton"] button {
-  border-radius:11px; font-weight:650; min-height:2.55rem; transition:all .16s ease;
-}
-.stButton>button[kind="primary"],
-[data-testid="stFormSubmitButton"] button[kind="primary"],
-.stButton button[data-testid="stBaseButton-primary"],
-[data-testid="stFormSubmitButton"] button[data-testid="stBaseButton-primary"] {
-  background:#3158a8!important; background-image:none!important;
-  border:1px solid #5478c7!important; color:#ffffff!important;
-  -webkit-text-fill-color:#ffffff!important;
-  box-shadow:0 5px 14px rgba(19,43,91,.28);
-}
-.stButton>button[kind="primary"]:hover,
-[data-testid="stFormSubmitButton"] button[kind="primary"]:hover,
-.stButton button[data-testid="stBaseButton-primary"]:hover,
-[data-testid="stFormSubmitButton"] button[data-testid="stBaseButton-primary"]:hover {
-  background:#416bc0!important; border-color:#7e9bde!important;
-  color:#ffffff!important; -webkit-text-fill-color:#ffffff!important;
-  transform:translateY(-1px);
-}
-.stButton>button[kind="primary"]:disabled,
-[data-testid="stFormSubmitButton"] button[kind="primary"]:disabled,
-.stButton button[data-testid="stBaseButton-primary"]:disabled {
-  background:#29364b!important; border-color:#3c4b64!important;
-  color:#c0cad9!important; -webkit-text-fill-color:#c0cad9!important; opacity:.78;
-}
-.stButton>button:not([kind="primary"]), .stDownloadButton>button {
-  background:#172337; border:1px solid var(--line); color:#e6eefb;
-}
-.stButton>button:not([kind="primary"]):hover, .stDownloadButton>button:hover {
-  border-color:rgba(101,226,194,.55); color:var(--accent);
-}
-[data-testid="stForm"] {
-  border:1px solid var(--line); border-radius:16px; padding:1rem;
-  background:rgba(17,27,43,.72);
-}
-[data-testid="stDataFrame"] {border:1px solid var(--line); border-radius:12px; overflow:hidden;}
-[data-testid="stTextInput"] input, [data-testid="stNumberInput"] input,
-[data-testid="stSelectbox"] [data-baseweb="select"] > div,
-[data-testid="stDateInput"] input, [data-testid="stTextArea"] textarea {
-  border-radius:10px!important;
-}
-[data-testid="stExpander"] {border:1px solid var(--line); border-radius:13px; overflow:hidden;}
-[data-testid="stAlert"] {border-radius:12px;}
-.app-hero {
-  position:relative; overflow:hidden; border-radius:22px; padding:25px 29px; margin:0 0 1.15rem 0;
-  color:white; background:linear-gradient(115deg,#121d31 0%,#192b43 63%,#183c43 100%);
-  border:1px solid rgba(146,178,210,.2); box-shadow:0 16px 34px rgba(0,0,0,.14);
-}
-.app-hero:after {content:"";position:absolute;right:-58px;top:-115px;width:260px;height:260px;border-radius:50%;border:1px solid rgba(101,226,194,.16);box-shadow:0 0 0 28px rgba(101,226,194,.025),0 0 0 58px rgba(101,226,194,.02);}
-.app-hero .eyebrow {font-size:.7rem;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);font-weight:850;}
-.app-hero h1 {margin:.55rem 0 .42rem 0;font-size:clamp(1.55rem,2.4vw,2.1rem);line-height:1.12;letter-spacing:-.045em;color:white;}
-.app-hero p {margin:0;color:#e0e9f6;font-size:.94rem;max-width:780px;}
-.app-hero .period {float:right;position:relative;z-index:1;padding:7px 11px;border-radius:10px;font-size:.78rem;font-weight:750;color:#c8fff1;border:1px solid rgba(101,226,194,.25);background:rgba(101,226,194,.08);}
-.section-head {display:flex;gap:11px;align-items:center;margin:1.2rem 0 .55rem 0;}
-.section-icon {display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:12px;background:#172b3a;border:1px solid rgba(101,226,194,.18);font-size:1.12rem;}
-.section-title {font-weight:800;font-size:1.08rem;letter-spacing:-.025em;color:#ffffff;}
-.section-sub {font-size:.81rem;color:var(--muted);margin-top:2px;}
-.small-muted {font-size:.8rem;color:var(--muted);}
-.kpi-note {font-size:.78rem;color:var(--muted);margin-top:4px;}
-.pill {display:inline-block;background:rgba(101,226,194,.09);border:1px solid rgba(101,226,194,.23);color:#8df0d7;padding:5px 9px;border-radius:999px;font-size:.74rem;font-weight:750;}
-hr {border-color:var(--line);}
-[data-testid="stVerticalBlockBorderWrapper"] {border-color:var(--line)!important;border-radius:15px!important;}
-@media (max-width: 800px) {
- .block-container {padding-top:.65rem;padding-left:1rem;padding-right:1rem;}
- .app-hero {padding:20px;border-radius:17px;}
- .app-hero .period {float:none;display:inline-block;margin-bottom:12px;}
- [data-testid="stMetric"] {padding:12px;border-radius:13px;min-height:94px;}
-}
-
-/* High-contrast primary actions: never use bright mint/green behind white text. */
-button[data-testid="stBaseButton-primary"],
-[data-testid="stFormSubmitButton"] button[data-testid="stBaseButton-primary"],
-.stButton button[kind="primary"],
-[data-testid="stFormSubmitButton"] button[kind="primary"] {
-  background:#244b91 !important;
-  background-image:none !important;
-  border:1px solid #6388d2 !important;
-  color:#ffffff !important;
-  -webkit-text-fill-color:#ffffff !important;
-  opacity:1 !important;
-  box-shadow:0 4px 12px rgba(0,0,0,.22) !important;
-}
-button[data-testid="stBaseButton-primary"] *,
-[data-testid="stFormSubmitButton"] button[data-testid="stBaseButton-primary"] * {
-  color:#ffffff !important;
-  -webkit-text-fill-color:#ffffff !important;
-}
-button[data-testid="stBaseButton-primary"]:hover,
-[data-testid="stFormSubmitButton"] button[data-testid="stBaseButton-primary"]:hover {
-  background:#315fae !important;
-  border-color:#8ba8e2 !important;
-  color:#ffffff !important;
-  -webkit-text-fill-color:#ffffff !important;
-}
-button[data-testid="stBaseButton-primary"]:disabled,
-[data-testid="stFormSubmitButton"] button[data-testid="stBaseButton-primary"]:disabled {
-  background:#29364b !important;
-  border-color:#465777 !important;
-  color:#c7d2e5 !important;
-  -webkit-text-fill-color:#c7d2e5 !important;
-  opacity:.9 !important;
-}
-
+:root{--bg:#0b1120;--line:rgba(162,184,214,.14);--text:#edf3fb;--muted:#aebbd0;--accent:#63d8c2}
+.block-container{max-width:1380px;padding-top:1.05rem;padding-bottom:2.4rem}
+[data-testid="stAppViewContainer"]{background:radial-gradient(ellipse at 80% 0%,rgba(62,103,148,.17),transparent 36%),#0b1120}
+[data-testid="stHeader"]{background:transparent}
+[data-testid="stSidebar"]{background:#0e1727;border-right:1px solid var(--line)}
+[data-testid="stSidebar"] .block-container{padding-top:1.2rem}
+[data-testid="stSidebar"] hr{border-color:var(--line);margin:1rem 0}
+[data-testid="stMarkdownContainer"],[data-testid="stMarkdownContainer"] p,[data-testid="stMarkdownContainer"] li,[data-testid="stCaptionContainer"]{color:var(--text)}
+[data-testid="stCaptionContainer"]{color:var(--muted)!important}
+label,[data-testid="stWidgetLabel"] p,[data-testid="stWidgetLabel"] label,[data-testid="stRadio"] label,[data-testid="stCheckbox"] label{color:#dce6f4!important}
+[data-testid="stMetric"]{background:linear-gradient(145deg,#18263a,#111c2d);border:1px solid var(--line);padding:15px 17px;border-radius:17px;box-shadow:0 10px 26px rgba(0,0,0,.13);min-height:105px}
+[data-testid="stMetricLabel"]{color:#b9c8dc!important;font-size:.82rem;font-weight:650}
+[data-testid="stMetricValue"]{color:#fff!important;font-weight:780;letter-spacing:-.035em;font-size:clamp(1.25rem,2vw,1.85rem)}
+[data-testid="stTextInput"] input,[data-testid="stNumberInput"] input,[data-testid="stTextArea"] textarea,[data-testid="stDateInput"] input,[data-testid="stSelectbox"] [data-baseweb="select"]>div,[data-testid="stMultiSelect"] [data-baseweb="select"]>div{color:#f4f7fc!important;-webkit-text-fill-color:#f4f7fc!important;background:#1b293d!important;border-color:rgba(162,184,214,.2)!important;border-radius:10px!important}
+[data-baseweb="popover"],[data-baseweb="menu"],[role="listbox"]{background:#172438!important;color:#fff!important}
+[role="option"],[role="option"] *{color:#f4f7fc!important}
+.stButton>button,.stDownloadButton>button,[data-testid="stFormSubmitButton"] button{border-radius:11px;font-weight:680;min-height:2.55rem;transition:all .16s ease}
+.stButton>button[kind="primary"],[data-testid="stFormSubmitButton"] button[kind="primary"],button[data-testid="stBaseButton-primary"]{background:#28518e!important;border:1px solid #5279bc!important;color:#fff!important;-webkit-text-fill-color:#fff!important;box-shadow:0 5px 14px rgba(10,30,65,.24)}
+.stButton>button[kind="primary"]:hover,button[data-testid="stBaseButton-primary"]:hover{background:#3565a8!important;border-color:#7fa3df!important;transform:translateY(-1px)}
+.stButton>button:not([kind="primary"]),.stDownloadButton>button{background:#172438;border:1px solid var(--line);color:#e5edf8}
+.stButton>button:not([kind="primary"]):hover,.stDownloadButton>button:hover{border-color:rgba(99,216,194,.55);color:var(--accent)}
+[data-testid="stForm"]{border:1px solid var(--line);border-radius:16px;padding:1rem;background:rgba(18,28,45,.7)}
+[data-testid="stDataFrame"]{border:1px solid var(--line);border-radius:12px;overflow:hidden}
+[data-testid="stExpander"]{border:1px solid var(--line);border-radius:13px;overflow:hidden}
+[data-testid="stExpander"] summary,[data-testid="stExpander"] summary p{color:var(--text)!important}
+[data-testid="stAlert"]{border-radius:12px}
+[data-testid="stVerticalBlockBorderWrapper"]{border-color:var(--line)!important;border-radius:16px!important}
+.app-hero{position:relative;overflow:hidden;border-radius:22px;padding:24px 28px;margin:0 0 1.1rem;color:#fff;background:linear-gradient(115deg,#142238,#1b304a 62%,#17413f);border:1px solid rgba(146,178,210,.2);box-shadow:0 16px 34px rgba(0,0,0,.14)}
+.app-hero:after{content:"";position:absolute;right:-62px;top:-118px;width:260px;height:260px;border-radius:50%;border:1px solid rgba(99,216,194,.17);box-shadow:0 0 0 28px rgba(99,216,194,.025),0 0 0 58px rgba(99,216,194,.02)}
+.app-hero .eyebrow{font-size:.68rem;letter-spacing:.19em;text-transform:uppercase;color:var(--accent);font-weight:850}
+.app-hero h1{margin:.55rem 0 .42rem;font-size:clamp(1.55rem,2.4vw,2.05rem);line-height:1.12;letter-spacing:-.045em;color:#fff}
+.app-hero p{margin:0;color:#dce7f5;font-size:.94rem;max-width:780px}
+.app-hero .period{float:right;position:relative;z-index:1;padding:7px 11px;border-radius:10px;font-size:.78rem;font-weight:750;color:#c8fff1;border:1px solid rgba(99,216,194,.25);background:rgba(99,216,194,.08)}
+.section-head{display:flex;gap:11px;align-items:center;margin:1.2rem 0 .55rem}
+.section-icon{display:inline-flex;align-items:center;justify-content:center;width:37px;height:37px;border-radius:12px;background:#192d42;border:1px solid rgba(99,216,194,.18);font-size:1.08rem}
+.section-title{font-weight:800;font-size:1.05rem;letter-spacing:-.025em;color:#fff}
+.section-sub,.small-muted,.kpi-note{font-size:.8rem;color:#aebed3!important}
+.pill{display:inline-block;background:rgba(99,216,194,.09);border:1px solid rgba(99,216,194,.23);color:#8cebd7;padding:5px 9px;border-radius:999px;font-size:.72rem;font-weight:750}
+hr{border-color:var(--line)}
+@media(max-width:800px){.block-container{padding-top:.65rem;padding-left:1rem;padding-right:1rem}.app-hero{padding:19px;border-radius:17px}.app-hero .period{float:none;display:inline-block;margin-bottom:12px}[data-testid="stMetric"]{padding:12px;border-radius:13px;min-height:90px}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -467,6 +343,7 @@ def fs_request(method, url, **kwargs):
     return response.json()
 
 
+@st.cache_data(ttl=60, show_spinner=False)
 def get_document(collection, doc_id):
     if collection not in COLLECTIONS:
         raise ValueError("İzin verilmeyen koleksiyon.")
@@ -505,13 +382,24 @@ def get_document(collection, doc_id):
     item["id"] = doc["name"].rsplit("/", 1)[-1]
     return item
 
+def clear_firestore_caches():
+    """Clear cached Firestore reads after writes so updated values appear immediately."""
+    for cache_name in ("get_document", "list_documents", "get_budget", "load_transactions",
+                       "load_collection", "get_month_closure", "get_active_month_preference"):
+        cached = globals().get(cache_name)
+        if cached is not None and hasattr(cached, "clear"):
+            cached.clear()
+
+
 def write_document(collection, doc_id, data):
     if collection not in COLLECTIONS:
         raise ValueError("İzin verilmeyen koleksiyon.")
     data = dict(data)
     params = [("updateMask.fieldPaths", key) for key in data.keys()]
     url = f"{FS_ROOT}/{collection}/{doc_id}"
-    return fs_request("PATCH", url, params=params, json={"fields": to_fs_fields(data)})
+    result = fs_request("PATCH", url, params=params, json={"fields": to_fs_fields(data)})
+    clear_firestore_caches()
+    return result
 
 
 def create_document(collection, data, doc_id=None):
@@ -519,13 +407,16 @@ def create_document(collection, data, doc_id=None):
         raise ValueError("İzin verilmeyen koleksiyon.")
     url = f"{FS_ROOT}/{collection}"
     params = {"documentId": doc_id} if doc_id else None
-    return fs_request("POST", url, params=params, json={"fields": to_fs_fields(data)})
+    result = fs_request("POST", url, params=params, json={"fields": to_fs_fields(data)})
+    clear_firestore_caches()
+    return result
 
 
 def month_closure_doc_id(uid, month_key):
     return f"{uid}_month_closure_{month_key}"
 
 
+@st.cache_data(ttl=60, show_spinner=False)
 def get_month_closure(uid, month_key):
     """Read the selected month's close state from the user's own app_meta document."""
     return get_document("app_meta", month_closure_doc_id(uid, month_key)) or {}
@@ -562,6 +453,7 @@ def set_month_closure(uid, month_key, closed, rows=None):
     load_transactions.clear()
 
 
+@st.cache_data(ttl=180, show_spinner=False)
 def get_active_month_preference(uid, default_month, valid_months):
     """Load the last selected month, or advance if today's month was already closed before this preference existed."""
     doc_id = f"{uid}_active_month_preference"
@@ -601,6 +493,7 @@ def set_active_month_preference(uid, month_key):
     else:
         create_document("app_meta", payload, doc_id=doc_id)
     print(f"[MONTH_PREF] saved month={month_key}", flush=True)
+    get_active_month_preference.clear()
 
 
 def render_category_summary(source_df, heading, empty_message):
@@ -697,14 +590,18 @@ def render_category_summary(source_df, heading, empty_message):
         st.dataframe(visible_merchants, hide_index=True, width="stretch", height=min(430, 42 + 36 * len(visible_merchants)))
 
 
-def list_documents(collection, uid, limit=1000):
-    """Public mode: query collection without owner filtering; Firestore rules must allow public read/write."""
+@st.cache_data(ttl=60, show_spinner=False)
+def list_documents(collection, uid, limit=1000, filters=None):
+    """Read a collection, optionally applying a server-side equality filter."""
     if collection not in COLLECTIONS:
         raise ValueError("İzin verilmeyen koleksiyon.")
-    query = {
-        "from": [{"collectionId": collection}],
-        "limit": limit,
-    }
+    query = {"from": [{"collectionId": collection}], "limit": limit}
+    if filters:
+        field, value = next(iter(filters.items()))
+        query["where"] = {"fieldFilter": {
+            "field": {"fieldPath": str(field)}, "op": "EQUAL",
+            "value": to_fs_value(value),
+        }}
     response = fs_request("POST", f"{FS_ROOT}:runQuery", json={"structuredQuery": query})
     rows = []
     for item in response or []:
@@ -721,24 +618,18 @@ def budget_id(uid, month_key):
     return f"{uid}_{month_key}"
 
 
-@st.cache_data(ttl=45, show_spinner=False)
+@st.cache_data(ttl=90, show_spinner=False)
 def get_budget(uid, month_key):
-    # Always prefer the deterministic document ID used by save_budget.
-    # Older duplicate budget documents can exist for the same month; picking the
-    # first matching month could make a successful write appear to have vanished.
-    rows = list_documents("monthly_budgets", uid, limit=1000)
+    # Normal path: one document GET, not a download of the whole budget collection.
     target_id = budget_id(uid, month_key)
-    exact = next((row for row in rows if str(row.get("id", "")) == target_id), None)
+    exact = get_document("monthly_budgets", target_id)
     if exact:
         return exact
-    month_rows = [row for row in rows if row.get("month") == month_key]
-    if len(month_rows) > 1:
-        print(
-            f"[BUDGET_LOAD] duplicate month documents month={month_key} "
-            f"ids={[str(row.get('id', '')) for row in month_rows]}",
-            flush=True,
-        )
-    return month_rows[0] if month_rows else None
+    # Compatibility fallback for older records with non-deterministic IDs.
+    rows = list_documents("monthly_budgets", uid, limit=1000, filters={"month": month_key})
+    if len(rows) > 1:
+        print(f"[BUDGET_LOAD] duplicate month documents month={month_key} ids={[str(row.get('id', '')) for row in rows]}", flush=True)
+    return rows[0] if rows else None
 
 
 def save_budget(uid, month_key, data):
@@ -769,33 +660,32 @@ def save_budget(uid, month_key, data):
             raise RuntimeError("Firebase yanıtındaki kart tutarları girilen tutarla eşleşmiyor.")
         print("[BUDGET_SAVE] returned document verified", flush=True)
     get_budget.clear()
-    print(f"[BUDGET_SAVE] cache cleared; verifying persisted document id={doc_id}", flush=True)
-    # Independently re-read the collection used by get_budget to confirm that the
-    # selected deterministic document—not an older duplicate—contains the new values.
-    rows_after_save = list_documents("monthly_budgets", uid, limit=1000)
-    verified_doc = next((row for row in rows_after_save if str(row.get("id", "")) == doc_id), None)
-    if not verified_doc:
-        raise RuntimeError(
-            "Firebase PATCH yanıtı başarılıydı ancak kayıt sonrasında bütçe listesinde "
-            f"belge bulunamadı (ay: {month_key}, belge: {doc_id})."
-        )
-    if verified_doc.get("expenses", {}) != payload.get("expenses", {}):
-        raise RuntimeError(
-            "Firebase kaydı yanıt verdi ancak yeniden okunan kart tutarları farklı. "
-            f"Ay: {month_key}, belge: {doc_id}."
-        )
-    print("[BUDGET_SAVE] read-after-write verification passed", flush=True)
+    # The PATCH response is the saved document. Only do a direct GET if the API omits fields.
+    if not (isinstance(saved_document, dict) and saved_document.get("fields")):
+        verified_doc = get_document("monthly_budgets", doc_id)
+        if not verified_doc:
+            raise RuntimeError(f"Firebase bütçe kaydını doğrulayamadı (belge: {doc_id}).")
+        if verified_doc.get("expenses", {}) != payload.get("expenses", {}):
+            raise RuntimeError("Firebase'den okunan kart tutarları girilen tutarla eşleşmiyor.")
+    print("[BUDGET_SAVE] persisted document verified", flush=True)
 
 
-@st.cache_data(ttl=45, show_spinner=False)
+@st.cache_data(ttl=90, show_spinner=False)
 def load_transactions(uid, month_key=None, limit=1000):
-    rows = list_documents("transactions", uid, limit=limit)
     if month_key:
-        rows = [row for row in rows if row.get("month") == month_key or row.get("statementMonth") == month_key]
+        # Fetch only this period instead of downloading the complete transaction history.
+        month_rows = list_documents("transactions", uid, limit=limit, filters={"month": month_key})
+        statement_rows = list_documents("transactions", uid, limit=limit, filters={"statementMonth": month_key})
+        merged = {str(row.get("id", "")): row for row in month_rows}
+        merged.update({str(row.get("id", "")): row for row in statement_rows})
+        rows = list(merged.values())
+    else:
+        rows = list_documents("transactions", uid, limit=limit)
     rows.sort(key=lambda row: (str(row.get("date", "")), str(row.get("createdAt", ""))), reverse=True)
     return rows
 
 
+@st.cache_data(ttl=90, show_spinner=False)
 def load_collection(uid, collection, limit=1000):
     rows = list_documents(collection, uid, limit=limit)
     rows.sort(key=lambda row: str(row.get("updatedAt", row.get("createdAt", ""))), reverse=True)
@@ -837,9 +727,9 @@ def add_transaction(uid, row):
     row["ownerUid"] = uid
     row["createdAt"] = datetime.utcnow().isoformat(timespec="seconds")
     row["dedupeKey"] = stable_dedupe_key(row)
-    # Dedupe query uses only ownerUid; don't require a composite index.
-    existing = list_documents("transactions", uid, limit=1000)
-    if any(x.get("dedupeKey") == row["dedupeKey"] for x in existing):
+    # Match only the candidate dedupe key instead of scanning up to 1,000 rows.
+    existing = list_documents("transactions", uid, limit=1, filters={"dedupeKey": row["dedupeKey"]})
+    if existing:
         return False
     create_document("transactions", row)
     load_transactions.clear()
@@ -919,6 +809,7 @@ def seed_historical_statements(uid):
     marker_id = f"{uid}_{marker_key}"
     create_document("app_meta", {"ownerUid": uid, "key": marker_key, "savedTransactions": transaction_count,
                                   "completedAt": now_iso}, doc_id=marker_id)
+    clear_firestore_caches()
     return {"status": "imported", "saved": transaction_count}
 
 
@@ -1286,8 +1177,14 @@ if not st.session_state.get("historical_seed_checked"):
         # The app can still show the underlying Firebase error below; don't hide it.
         st.session_state["historical_seed_error"] = str(seed_exc)
 now = today_tr()
-month_options = [f"{year}-{month:02d}" for year in range(2026, 2031) for month in range(1, 13)]
+month_options = [f"{year}-{month:02d}" for year in range(2026, 2030) for month in range(1, 13)
+                 if (year, month) >= (2026, 10)]
+year_options = list(range(2026, 2030))
+months_by_year = {year: [month for month in range(1, 13)
+                         if f"{year}-{month:02d}" in month_options] for year in year_options}
 current_month = now.strftime("%Y-%m")
+if current_month not in month_options:
+    current_month = month_options[0]
 PAGE_HOME = "🏠 Genel Bakış"
 PAGE_BUDGET = "🗓️ Bütçe ve Borçlar"
 PAGE_IMPORT = "📥 Ekstre İçe Aktar"
@@ -1300,36 +1197,51 @@ if st.session_state.get("app_page") not in VALID_PAGES:
     st.session_state["app_page"] = PAGE_HOME
 with st.sidebar:
     st.markdown("## 💠 Aile Bütçe")
-    st.markdown(f'<span class="pill">● Güvenli oturum</span><div class="small-muted" style="margin-top:8px">{auth.get("email", "Giriş yapıldı")}</div>', unsafe_allow_html=True)
+    st.markdown(f'<span class="pill">● Ortak bütçe paneli</span><div class="small-muted" style="margin-top:8px">{auth.get("email", "Giriş yapıldı")}</div>', unsafe_allow_html=True)
     st.divider()
-    if st.button("🏠 Ana sayfa", width="stretch", type="primary" if st.session_state["app_page"] == PAGE_HOME else "secondary"):
-        st.session_state["app_page"] = PAGE_HOME
-        st.rerun()
-    # Restore the last active month from Firestore before creating the widget.
-    # This survives browser refreshes/new Streamlit sessions (session_state alone does not).
+    st.caption("MENÜ")
+    for nav_page in (PAGE_HOME, PAGE_BUDGET, PAGE_ANALYSIS, PAGE_DATA):
+        if st.button(nav_page, key=f"nav_{nav_page}", width="stretch",
+                     type="primary" if st.session_state["app_page"] == nav_page else "secondary"):
+            st.session_state["app_page"] = nav_page
+            st.rerun()
+    st.divider()
     preferred_month = get_active_month_preference(uid, current_month, month_options)
-    st.session_state["active_month_preference"] = preferred_month
+    preferred_year, preferred_month_number = map(int, preferred_month.split("-"))
+    st.session_state.setdefault("active_year", preferred_year)
+    st.session_state.setdefault("active_month_number", preferred_month_number)
 
     def persist_active_month_preference():
-        chosen_month = st.session_state.get("active_month_preference", current_month)
+        chosen_year = int(st.session_state.get("active_year", preferred_year))
+        available = months_by_year.get(chosen_year, months_by_year[2026])
+        chosen_number = int(st.session_state.get("active_month_number", available[0]))
+        if chosen_number not in available:
+            chosen_number = available[0]
+            st.session_state["active_month_number"] = chosen_number
         try:
-            set_active_month_preference(uid, chosen_month)
+            set_active_month_preference(uid, f"{chosen_year}-{chosen_number:02d}")
             st.session_state.pop("active_month_preference_error", None)
         except Exception as pref_exc:
             st.session_state["active_month_preference_error"] = str(pref_exc)
             print(f"[MONTH_PREF] save failed: {type(pref_exc).__name__}: {pref_exc}", flush=True)
 
-    selected_month = st.selectbox(
-        "Aktif dönem", month_options,
-        index=month_options.index(preferred_month),
-        format_func=lambda x: month_label_tr(x),
-        key="active_month_preference",
-        on_change=persist_active_month_preference,
-    )
+    st.caption("DÖNEM SEÇİMİ")
+    selected_year = st.selectbox("Yıl", year_options, key="active_year",
+                                 on_change=persist_active_month_preference,
+                                 label_visibility="collapsed")
+    available_month_numbers = months_by_year[selected_year]
+    if st.session_state.get("active_month_number") not in available_month_numbers:
+        st.session_state["active_month_number"] = available_month_numbers[0]
+    selected_month_number = st.selectbox("Ay", available_month_numbers,
+                                         format_func=lambda month: AYLAR_TR[month - 1],
+                                         key="active_month_number",
+                                         on_change=persist_active_month_preference,
+                                         label_visibility="collapsed")
+    selected_month = f"{selected_year}-{selected_month_number:02d}"
+    st.caption("Ekim 2026 – Aralık 2029")
     if st.session_state.get("active_month_preference_error"):
-        st.caption("Aktif ay tercihi kaydedilemedi; teknik ayrıntı:")
+        st.caption("Dönem tercihi kaydedilemedi:")
         st.code(st.session_state["active_month_preference_error"])
-    st.caption("Modüller ana sayfadaki kartlardan açılır.")
     st.divider()
     if st.button("↪ Güvenli çıkış", width="stretch"):
         logout()
@@ -1578,6 +1490,9 @@ if page == PAGE_HOME:
                 next_month_key = f"{next_year}-{next_month:02d}"
                 if next_month_key in month_options:
                     set_active_month_preference(uid, next_month_key)
+                    next_year, next_month_number = map(int, next_month_key.split("-"))
+                    st.session_state["active_year"] = next_year
+                    st.session_state["active_month_number"] = next_month_number
                 st.success(f"{month_label} kapatıldı. Aktif dönem sonraki aya alındı.")
                 st.rerun()
             except Exception as exc:
@@ -1600,25 +1515,6 @@ if page == PAGE_HOME:
             st.info("Bu ayın bütçesini Bütçe ve Borçlar bölümünden girebilirsin.")
     # Kategori özetleri Ekstre İçe Aktar bölümünde gösterilir; işlem defteri Genel Bakıştan kaldırıldı.
 
-    st.markdown("---")
-    section("🧩", "Modüller", "İstediğin bölüme dokunarak geç. Soldaki menü sade tutuldu.")
-    module_cards = [
-        ("🗓️ Bütçe ve Borçlar", PAGE_BUDGET, "Aylık gelir ve kart tutarlarını düzenle."),
-        ("🔎 Harcama Analizi", PAGE_ANALYSIS, "Kayıtlı harcamaları kategori, işletme ve karta göre incele."),
-        ("⚙️ Veri Yönetimi", PAGE_DATA, "Kayıtlarını dışa aktar ve yedek al.")
-    ]
-    for row_start in range(0, len(module_cards), 3):
-        cols = st.columns(3, gap="medium")
-        for col, module in zip(cols, module_cards[row_start:row_start+3]):
-            title, key, desc = module
-            with col:
-                with st.container(border=True):
-                    st.markdown(f"#### {title}")
-                    st.caption(desc)
-                    if st.button("Aç →", key=f"home_open_{key}", width="stretch"):
-                        st.session_state["app_page"] = key
-                        st.rerun()
-
 elif page == PAGE_BUDGET:
     title_hero(month_label, "Gelirini, aylık borç tutarlarını ve ödeme durumunu tek ekrandan yönet.")
     if month_closed:
@@ -1640,25 +1536,31 @@ elif page == PAGE_BUDGET:
         st.markdown("---")
         section("🧾", "Borçlar ve aylık ödemeler", "Kart borçları solda, sabit ödemeler sağda. F = Fatih, A = Asiye.")
         new_expenses = dict(expenses)
+        active_cards = [name for name in CARD_EXPENSE_NAMES if name in expenses]
+        active_fixed = [name for name in FIXED_EXPENSE_NAMES if name in expenses]
+        other_expenses = [(name, amount) for name, amount in expenses.items()
+                          if name not in CARD_EXPENSE_NAMES and name not in FIXED_EXPENSE_NAMES]
         expense_left, expense_right = st.columns(2, gap="large")
         with expense_left:
-            st.markdown("#### 💳 Kredi kartları")
-            for name in CARD_EXPENSE_NAMES:
-                amount = float(expenses.get(name, 0) or 0)
-                new_expenses[name] = st.number_input(
-                    f"{name} (TL)", min_value=0.0, value=amount, step=100.0,
-                    key=f"exp_{selected_month}_{name}"
-                )
+            if active_cards:
+                st.markdown("#### 💳 Kredi kartları")
+                for name in active_cards:
+                    amount = float(expenses.get(name, 0) or 0)
+                    new_expenses[name] = st.number_input(
+                        f"{name} (TL)", min_value=0.0, value=amount, step=100.0,
+                        key=f"exp_{selected_month}_{name}"
+                    )
+            else:
+                st.caption("Bu ay için tanımlı kredi kartı kalemi yok.")
         with expense_right:
-            st.markdown("#### 🏠 Sabit borçlar")
-            for name in FIXED_EXPENSE_NAMES:
-                amount = float(expenses.get(name, 0) or 0)
-                new_expenses[name] = st.number_input(
-                    f"{name} (TL)", min_value=0.0, value=amount, step=100.0,
-                    key=f"exp_{selected_month}_{name}"
-                )
-            other_expenses = [(name, amount) for name, amount in expenses.items()
-                              if name not in CARD_EXPENSE_NAMES and name not in FIXED_EXPENSE_NAMES]
+            if active_fixed:
+                st.markdown("#### 🏠 Krediler ve sabit ödemeler")
+                for name in active_fixed:
+                    amount = float(expenses.get(name, 0) or 0)
+                    new_expenses[name] = st.number_input(
+                        f"{name} (TL)", min_value=0.0, value=amount, step=100.0,
+                        key=f"exp_{selected_month}_{name}"
+                    )
             if other_expenses:
                 st.markdown("#### 📌 Diğer giderler")
                 for name, amount in other_expenses:
@@ -1687,6 +1589,29 @@ elif page == PAGE_BUDGET:
             st.rerun()
         except Exception as exc:
             st.error(f"Kaydedilemedi: {exc}")
+    if expenses:
+        with st.expander("🗑️ Borç / gider kalemi sil", expanded=False):
+            st.caption("Seçtiğin kalem bu ayın bütçesinden tamamen kaldırılır. Diğer ayların kayıtları etkilenmez.")
+            delete_expense_names = st.multiselect(
+                "Silinecek kalemler", options=list(expenses.keys()),
+                key=f"delete_expenses_{selected_month}",
+                placeholder="Kaldırmak istediğin kredi veya gideri seç",
+            )
+            if st.button("Seçili kalemleri sil", type="secondary",
+                         key=f"delete_expenses_button_{selected_month}",
+                         disabled=(not delete_expense_names or month_closed)):
+                remaining_expenses = {name: amount for name, amount in expenses.items()
+                                      if name not in set(delete_expense_names)}
+                try:
+                    save_budget(uid, selected_month, {
+                        "income": income, "expenses": remaining_expenses,
+                        "notes": budget.get("notes", ""),
+                        "debtMeta": budget.get("debtMeta", {}) or {},
+                    })
+                    st.success("Seçili kalemler bu ayın bütçesinden kaldırıldı.")
+                    st.rerun()
+                except Exception as exc:
+                    st.error(f"Kalemler silinemedi: {exc}")
     ci1, ci2, ci3 = st.columns(3)
     ci1.metric("Toplam gelir", money(total_income))
     ci2.metric("Planlanan ödeme", money(total_expenses))
