@@ -1,4 +1,5 @@
 name: Validate app syntax
+# Also validates the latest app.py contents after budget persistence changes.
 
 on:
   push:
