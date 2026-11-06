@@ -355,16 +355,18 @@ def get_document(collection, doc_id):
     # With Firestore REST + ownerUid-scoped rules, GET on a document that does
     # not exist can surface as 403 instead of 404. app_meta is queried by ownerUid
     # as a safe fallback, so missing month-close/preference docs are treated as absent.
-    if response.status_code == 403 and collection == "app_meta":
+    if response.status_code == 403 and collection in {"app_meta", "monthly_budgets"}:
+        # A missing document may be reported as 403 by owner-scoped Firestore rules.
+        # Fall back to a collection query so a not-yet-created month can use defaults.
         auth = current_auth() or {}
         uid = auth.get("uid")
         if uid:
             try:
-                owned_docs = list_documents("app_meta", uid, limit=1000)
+                owned_docs = list_documents(collection, uid, limit=1000)
                 return next((row for row in owned_docs if str(row.get("id", "")) == str(doc_id)), None)
             except Exception as exc:
                 raise RuntimeError(
-                    "Firestore app_meta koleksiyonu için erişim reddedildi. "
+                    f"Firestore {collection} koleksiyonu için erişim reddedildi. "
                     "Firebase Console → Firestore Database → Rules bölümünde güncel güvenlik kurallarını yayımlayın. "
                     f"Ayrıntı: {exc}"
                 ) from exc
@@ -1177,9 +1179,10 @@ if not st.session_state.get("historical_seed_checked"):
         # The app can still show the underlying Firebase error below; don't hide it.
         st.session_state["historical_seed_error"] = str(seed_exc)
 now = today_tr()
-month_options = [f"{year}-{month:02d}" for year in range(2026, 2030) for month in range(1, 13)
-                 if (year, month) >= (2026, 10)]
-year_options = list(range(2026, 2030))
+# Historical periods begin in January 2020. For 2026, show only October onward.
+month_options = [f"{year}-{month:02d}" for year in range(2020, 2030) for month in range(1, 13)
+                 if year != 2026 or month >= 10]
+year_options = list(range(2020, 2030))
 months_by_year = {year: [month for month in range(1, 13)
                          if f"{year}-{month:02d}" in month_options] for year in year_options}
 current_month = now.strftime("%Y-%m")
@@ -1238,7 +1241,7 @@ with st.sidebar:
                                          on_change=persist_active_month_preference,
                                          label_visibility="collapsed")
     selected_month = f"{selected_year}-{selected_month_number:02d}"
-    st.caption("Ekim 2026 – Aralık 2029")
+    st.caption("Ocak 2020 – Aralık 2029 · 2026: Ekim–Aralık")
     if st.session_state.get("active_month_preference_error"):
         st.caption("Dönem tercihi kaydedilemedi:")
         st.code(st.session_state["active_month_preference_error"])
