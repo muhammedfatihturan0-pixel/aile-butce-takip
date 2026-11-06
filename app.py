@@ -650,9 +650,16 @@ def save_budget(uid, month_key, data):
     if "debtMeta" in data:
         payload["debtMeta"] = data["debtMeta"]
     doc_id = budget_id(uid, month_key)
-    print(f"[BUDGET_SAVE] Firestore PATCH start collection=monthly_budgets doc={doc_id}", flush=True)
-    saved_document = write_document("monthly_budgets", doc_id, payload)
-    print("[BUDGET_SAVE] Firestore PATCH complete; checking returned document", flush=True)
+    # Upsert the deterministic monthly document. A first-time save must CREATE it;
+    # PATCH against a missing document can fail or leave default values in use.
+    existing_document = get_document("monthly_budgets", doc_id)
+    if existing_document:
+        print(f"[BUDGET_SAVE] Firestore PATCH start collection=monthly_budgets doc={doc_id}", flush=True)
+        saved_document = write_document("monthly_budgets", doc_id, payload)
+    else:
+        print(f"[BUDGET_SAVE] Firestore CREATE start collection=monthly_budgets doc={doc_id}", flush=True)
+        saved_document = create_document("monthly_budgets", payload, doc_id=doc_id)
+    print("[BUDGET_SAVE] Firestore write complete; checking returned document", flush=True)
     # A successful Firestore PATCH returns the saved document. Compare it with the
     # submitted budget so the UI won't report success if the write did not persist.
     if isinstance(saved_document, dict) and saved_document.get("fields"):
@@ -1636,6 +1643,7 @@ elif page == PAGE_BUDGET:
                 if delete_expense_name in saved_expenses or delete_expense_name not in saved_removed:
                     raise RuntimeError("Kayıt doğrulamasında silinen kalem hâlâ bulundu. Lütfen tekrar deneyin.")
                 st.session_state.pop(f"exp_{selected_month}_{delete_expense_name}", None)
+                st.session_state.pop(f"delete_expense_{selected_month}", None)
                 st.success(f"{delete_expense_name} bu ayın bütçesinden kaldırıldı.")
                 st.rerun()
             except Exception as exc:
